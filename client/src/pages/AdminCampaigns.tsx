@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import { API_BASE } from '../lib/config'
+import { formatCurrency } from '../lib/currency'
 
 interface Campaign {
   id: string
@@ -78,7 +79,7 @@ export default function AdminCampaigns() {
                     <div className="flex flex-wrap gap-4 text-xs text-on-surface-variant/60">
                       <span>Type: {c.promotion_type}</span>
                       <span>Impressions: {c.current_impressions}/{c.max_impressions || '∞'}</span>
-                      {c.budget > 0 && <span>Budget: ₦{c.spent}/{c.budget}</span>}
+                      {c.budget > 0 && <span>Budget: {formatCurrency(c.spent)}/{formatCurrency(c.budget)}</span>}
                       {c.target_genre && <span>Genre: {c.target_genre}</span>}
                     </div>
                     {c.creative_type === 'image' && c.creative_url && (

@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button'
 import Icon from '../../components/ui/Icon'
 import LoginBackdrop from '../../components/features/LoginBackdrop'
 import PasswordField from '../../components/auth/PasswordField'
+import SocialLoginButtons from '../../components/social/SocialLoginButtons'
 
 export default function ViewerSignup() {
   const navigate = useNavigate()
@@ -238,6 +239,10 @@ export default function ViewerSignup() {
             </svg>
             <span className="font-label-md text-label-md text-on-surface">Sign up with Google</span>
           </button>
+
+          <div className="mt-4">
+            <SocialLoginButtons redirect="/home" exclude={['google']} />
+          </div>
 
           <div className="mt-8 text-center">
             <p className="text-body-md text-on-surface-variant">

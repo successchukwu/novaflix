@@ -4,6 +4,7 @@ import { requireCreator } from '../middleware/creatorAuth.js'
 import * as creatorController from '../controllers/creatorController.js'
 import * as youtubeController from '../controllers/youtubeController.js'
 import * as tools from '../controllers/creatorToolsController.js'
+import * as liveStream from '../controllers/liveStreamController.js'
 import { getMyEarnings } from '../controllers/creatorEarningsController.js'
 import multer from 'multer'
 
@@ -34,6 +35,7 @@ router.put('/ppm/config', authMiddleware, requireCreator, tools.savePpmConfig)
 router.get('/stream/key', authMiddleware, requireCreator, tools.getStreamKey)
 router.post('/stream/key/regenerate', authMiddleware, requireCreator, tools.regenerateStreamKey)
 router.get('/stream/status', authMiddleware, requireCreator, tools.getStreamStatus)
+router.get('/stream/info', authMiddleware, requireCreator, liveStream.getCreatorStreamInfo)
 router.post('/stream/start', authMiddleware, requireCreator, tools.startStream)
 router.post('/stream/end', authMiddleware, requireCreator, tools.endStream)
 router.get('/onboarding', authMiddleware, requireCreator, tools.getOnboarding)

@@ -32,6 +32,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
 
+-- Social OAuth identity columns (Claim Profile verification + social login)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS youtube_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twitch_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255) UNIQUE;
+
 CREATE TABLE IF NOT EXISTS creator_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -41,6 +50,25 @@ CREATE TABLE IF NOT EXISTS creator_profiles (
   stripe_account_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Creator claim requests (TMDB profile claim w/ social OAuth verification)
+CREATE TABLE IF NOT EXISTS creator_claim_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  tmdb_person_id INT NOT NULL,
+  display_name VARCHAR(255),
+  verification_provider VARCHAR(32),
+  social_handle VARCHAR(255),
+  social_profile_url TEXT,
+  kyc_status VARCHAR(20) DEFAULT 'pending',
+  kyc_data JSONB,
+  claim_status VARCHAR(20) DEFAULT 'pending',
+  reviewed_by UUID REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (tmdb_person_id)
+);
+CREATE INDEX IF NOT EXISTS idx_creator_claim_tmdb ON creator_claim_requests (tmdb_person_id);
 
 CREATE TABLE IF NOT EXISTS uploads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -901,12 +929,33 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(40) UNIQUE NOT NULL,
   plan VARCHAR(20) NOT NULL DEFAULT 'premium',
-  discount_pct SMALLINT NOT NULL DEFAULT 0 CHECK (discount_pct BETWEEN 0 AND 100),
+  discount_type VARCHAR(10) NOT NULL DEFAULT 'pct' CHECK (discount_type IN ('pct', 'fixed')),
+  discount_value NUMERIC(10,2) NOT NULL DEFAULT 0,
+  min_amount INTEGER DEFAULT 0,
+  apply_to_all_plans BOOLEAN DEFAULT FALSE,
+  allowed_ips TEXT[],
+  allowed_phones TEXT[],
+  country VARCHAR(5),
+  starts_at TIMESTAMP,
+  usage_per_user INTEGER DEFAULT 0,
+  mode VARCHAR(10) NOT NULL DEFAULT 'one_time' CHECK (mode IN ('one_time', 'recurring')),
   max_uses INTEGER DEFAULT 0,
   uses INTEGER DEFAULT 0,
   active BOOLEAN DEFAULT TRUE,
   expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  promo_id UUID NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan VARCHAR(20) NOT NULL,
+  original_amount INTEGER NOT NULL,
+  discounted_amount INTEGER NOT NULL,
+  ip VARCHAR(45),
+  phone VARCHAR(30),
+  redeemed_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS banners (
@@ -950,6 +999,8 @@ CREATE TABLE IF NOT EXISTS feed_settings (
   value JSONB DEFAULT '{}',
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+INSERT INTO feed_settings (key, value) VALUES ('default_currency', '"NGN"') ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS audio_library (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1142,3 +1193,5 @@ ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS movie_vpm NUMERIC(12,5) 
 ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS short_vpm NUMERIC(12,5) NOT NULL DEFAULT 1.20;
 ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS minimum_payout NUMERIC(12,2) NOT NULL DEFAULT 50.00;
 ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS auto_settle BOOLEAN NOT NULL DEFAULT TRUE;
+-- Unified PPM payout rate (admin-set, single source of truth for payouts)
+ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS base_rate NUMERIC(12,5) DEFAULT 10.00;

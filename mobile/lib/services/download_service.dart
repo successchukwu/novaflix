@@ -6,13 +6,15 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
 
 const _magic = 'NFLX'; // custom container magic bytes
-const _version = 1;
+const _version = 2; // bumped for new length-prefixed chunk format
 const _chunkSize = 64 * 1024; // AES block aligned chunking
+const _offlineKeyStorageKey = 'novaflix-offline-key';
 
 class DownloadEpisode {
   final int season;
@@ -242,6 +244,21 @@ class DownloadService {
     if (type == 'movie') {
       final source = await _resolveSource(contentId, 'movie');
       if (source.isEmpty) return;
+      // Fetch available variants to show correct progress and allow quality selection
+      String? variantUrl;
+      double totalBytesHint = 0;
+      try {
+        final mi = await _api.getManifestInfo(source, id: contentId, type: 'movie');
+        final vars = mi.data['variants'] as List? ?? [];
+        if (vars.isNotEmpty) {
+          // Pick middle quality (720p preferred) or highest if only one
+          final sorted = vars.where((v) => v is Map).toList();
+          sorted.sort((a, b) => ((a['sizeBytes'] as int?) ?? 0).compareTo((b['sizeBytes'] as int?) ?? 0));
+          final pick = sorted.length >= 2 ? sorted[sorted.length ~/ 2] : sorted.first;
+          variantUrl = pick['url'] as String?;
+          totalBytesHint = (pick['sizeBytes'] as int?)?.toDouble() ?? 0;
+        }
+      } catch (_) {}
       final active = ActiveDownload(
         contentId: contentId,
         type: 'movie',
@@ -250,20 +267,23 @@ class DownloadService {
         backdrop: backdrop,
         episodeCount: 1,
         episodesDone: 0,
-        totalBytes: 1,
+        totalBytes: totalBytesHint > 0 ? totalBytesHint : 1,
         bytesDone: 0,
       );
       _active.add(active);
       await _downloadUrlToEncrypted(
         sourceUrl: source,
         relPath: 'movie_$contentId/$contentId.nfv',
+        title: title,
+        variantUrl: variantUrl,
         onProgress: (done) {
           active.bytesDone = done;
-          active.totalBytes = math.max(active.totalBytes, done);
+          if (totalBytesHint <= 0) active.totalBytes = math.max(active.totalBytes, done);
         },
         active: active,
       );
       _active.remove(active);
+      if (active.cancelled) return;
       final list = await loadManifest();
       list.removeWhere((x) => x.id == contentId && x.type == 'movie');
       list.add(DownloadItem(
@@ -298,6 +318,7 @@ class DownloadService {
     );
     _active.add(active);
     for (var i = 0; i < epList.length; i++) {
+      if (active.cancelled) break;
       final ep = epList[i];
       final s = ep['season'] as int? ?? season ?? 1;
       final e = ep['episode'] as int? ?? (i + 1);
@@ -308,16 +329,32 @@ class DownloadService {
         continue;
       }
       if (src.isEmpty) continue;
+      // Variant hint per episode
+      String? variantUrl;
+      try {
+        final mi = await _api.getManifestInfo(src, id: contentId, type: 'tv', season: s, episode: e);
+        final vars = mi.data['variants'] as List? ?? [];
+        if (vars.isNotEmpty) {
+          final sorted = vars.where((v) => v is Map).toList();
+          sorted.sort((a, b) => ((a['sizeBytes'] as int?) ?? 0).compareTo((b['sizeBytes'] as int?) ?? 0));
+          final pick = sorted.length >= 2 ? sorted[sorted.length ~/ 2] : sorted.first;
+          variantUrl = pick['url'] as String?;
+        }
+      } catch (_) {}
       final fileName =
           'S${s.toString().padLeft(2, '0')}E${e.toString().padLeft(2, '0')}.nfv';
       await _downloadUrlToEncrypted(
         sourceUrl: src,
         relPath: 'tv_$contentId/$fileName',
-        onProgress: (_) {
-          active.episodesDone = i;
+        title: '$title S${s}E$e',
+        variantUrl: variantUrl,
+        onProgress: (done) {
+          // Update both byte progress and episode count for UI ring
+          active.bytesDone = active.episodesDone.toDouble() + (done > 0 ? 0.5 : 0);
         },
         active: active,
       );
+      if (active.cancelled) break;
       dlEpisodes.add(DownloadEpisode(
         season: s,
         episode: e,
@@ -325,6 +362,7 @@ class DownloadService {
         fileName: 'tv_$contentId/$fileName',
       ));
       active.episodesDone = i + 1;
+      active.bytesDone = active.episodesDone.toDouble();
       await _saveManifest([
         ...items,
         DownloadItem(
@@ -372,10 +410,12 @@ class DownloadService {
     }
   }
 
-  /// Stream the source URL, encrypt chunk-by-chunk into the [.nfv] container.
+  /// Stream via server ffmpeg (/download) -> MP4, encrypt length-prefixed chunks into [.nfv]
   Future<void> _downloadUrlToEncrypted({
     required String sourceUrl,
     required String relPath,
+    String? title,
+    String? variantUrl,
     required void Function(double bytesDone) onProgress,
     required ActiveDownload active,
   }) async {
@@ -385,16 +425,22 @@ class DownloadService {
       enc.AES(enc.Key(Uint8List.fromList(key)), mode: enc.AESMode.cbc),
     );
     try {
-      final stream = await _api.streamUrl(sourceUrl);
+      // Use real server transcode endpoint for HLS -> MP4
+      final isHls = sourceUrl.contains('.m3u8') || sourceUrl.contains('proxy');
+      late Stream<Uint8List> stream;
+      if (isHls) {
+        stream = await _api.downloadFileStream(url: sourceUrl, title: title, variant: variantUrl, compress: false);
+      } else {
+        // Direct MP4 (creator uploads) — stream directly
+        stream = await _api.streamUrl(sourceUrl);
+      }
       final header = _buildHeader(iv);
       final root = await _root();
       final f = File(p.join(root.path, relPath));
       if (await f.exists()) await f.delete();
       await f.parent.create(recursive: true);
       final out = f.openWrite();
-
       out.add(header);
-
       var done = 0;
       await for (final chunk in stream) {
         if (active.cancelled) {
@@ -410,7 +456,11 @@ class DownloadService {
           final slice = Uint8List.sublistView(data, offset, end);
           final encIv = enc.IV(iv);
           final cipher = encrypter.encryptBytes(slice, iv: encIv);
-          out.add(cipher.bytes);
+          final cipherBytes = cipher.bytes;
+          // Length-prefix each chunk so decrypt can split correctly
+          final len = cipherBytes.length;
+          out.add([(len >> 24) & 0xFF, (len >> 16) & 0xFF, (len >> 8) & 0xFF, len & 0xFF]);
+          out.add(cipherBytes);
           offset = end;
         }
         done += data.length;
@@ -432,27 +482,45 @@ class DownloadService {
   }
 
   /// Decrypt a downloaded [.nfv] container into a temporary playable file.
-  /// Returns the temp file path (deleted after playback).
+  /// Returns the temp file path (deleted after playback). Supports v1 (single block) and v2 (length-prefixed chunks).
   Future<File> decryptToTemp(DownloadItem item, {DownloadEpisode? episode}) async {
     final relPath = episode?.fileName ?? 'movie_${item.id}/${item.id}.nfv';
     final key = await _deriveKey();
     final encrypter = enc.Encrypter(
       enc.AES(enc.Key(key), mode: enc.AESMode.cbc),
     );
-
     final root = await _root();
     final src = File(p.join(root.path, relPath));
     if (!await src.exists()) throw FileSystemException('Missing $relPath');
-
     final raw = await src.readAsBytes();
+    if (raw.length < headerSize) throw FileSystemException('Corrupt $relPath');
+    final version = raw[4];
     final iv = raw.sublist(5, 5 + 16);
-    final body = Uint8List.sublistView(raw, 5 + 16);
-    final out = encrypter.decryptBytes(enc.Encrypted(body), iv: enc.IV(iv));
-
+    late Uint8List outBytes;
+    if (version == 2) {
+      // v2: length-prefixed chunks
+      final body = raw.sublist(headerSize);
+      final builder = BytesBuilder();
+      var offset = 0;
+      while (offset + 4 <= body.length) {
+        final len = (body[offset] << 24) | (body[offset + 1] << 16) | (body[offset + 2] << 8) | body[offset + 3];
+        offset += 4;
+        if (offset + len > body.length) break;
+        final cipherChunk = body.sublist(offset, offset + len);
+        offset += len;
+        final plain = encrypter.decryptBytes(enc.Encrypted(Uint8List.fromList(cipherChunk)), iv: enc.IV(iv));
+        builder.add(plain);
+      }
+      outBytes = builder.toBytes();
+    } else {
+      // v1 legacy single block
+      final body = Uint8List.sublistView(raw, 5 + 16);
+      outBytes = Uint8List.fromList(encrypter.decryptBytes(enc.Encrypted(body), iv: enc.IV(iv)));
+    }
     final tmpDir = await getTemporaryDirectory();
     final tmp = File(p.join(tmpDir.path,
         '${item.type}_${item.id}_${episode?.episode ?? 0}_${DateTime.now().millisecondsSinceEpoch}.mp4'));
-    await tmp.writeAsBytes(out, flush: true);
+    await tmp.writeAsBytes(outBytes, flush: true);
     return tmp;
   }
 
@@ -473,18 +541,26 @@ class DownloadService {
 
   List<ActiveDownload> get activeDownloads => List.unmodifiable(_active);
 
+  static const _storage = FlutterSecureStorage();
   Future<Uint8List> _deriveKey() async {
-    final raw = utf8.encode('novaflix-offline-v1::$Platform.operatingSystem::$_deviceSalt');
+    // Persist key so OS updates don't invalidate existing .nfv files
+    final existing = await _storage.read(key: _offlineKeyStorageKey);
+    if (existing != null && existing.isNotEmpty) {
+      try {
+        return base64Decode(existing);
+      } catch (_) {}
+    }
+    // Include deviceId for per-device binding, fallback to stable salt
+    String devicePart = 'static';
+    try {
+      devicePart = await _api.getDeviceId();
+    } catch (_) {}
+    final raw = utf8.encode('novaflix-offline-v2::$devicePart');
     final hash = sha256.convert(raw);
-    return Uint8List.fromList(hash.bytes);
+    final key = Uint8List.fromList(hash.bytes);
+    await _storage.write(key: _offlineKeyStorageKey, value: base64Encode(key));
+    return key;
   }
-
-  static String get _deviceSalt =>
-      Platform.isAndroid
-          ? 'android::${Platform.version}'
-          : Platform.isLinux
-              ? 'linux::${Platform.version}'
-              : 'other';
 
   Uint8List _randomIv() {
     final rng = math.Random.secure();

@@ -5,7 +5,7 @@ import Skeleton from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
-import { getToken, getStreamKey, regenerateStreamKey, getStreamStatus, getCreatorAnalytics } from '../lib/auth'
+import { getToken, getStreamKey, regenerateStreamKey, getStreamStatus, startStream, endStream, getLiveStreamInfo } from '../lib/auth'
 import { subscribeCreator } from '../lib/creatorLive'
 
 const NAV = [
@@ -33,6 +33,11 @@ export default function GoLive() {
   const [copied, setCopied] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [viewers, setViewers] = useState(0)
+  const [starting, setStarting] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const [ingest, setIngest] = useState<any>(null)
+  const [delivery, setDelivery] = useState<any>(null)
+  const [proto, setProto] = useState('rtmp')
 
   const load = async () => {
     const token = getToken()
@@ -40,6 +45,8 @@ export default function GoLive() {
     const [k, s] = await Promise.all([getStreamKey(token), getStreamStatus(token)])
     if (k.success) { setKey(k.streamKey); setUrl(k.streamUrl) }
     if (s.success) { setLive(s.live); setStream(s.stream); setViewers(s.stream?.viewer_count || 0) }
+    const info = await getLiveStreamInfo(token)
+    if (info.success) { setIngest(info.ingest); setDelivery(info.delivery) }
     setLoading(false)
   }
 
@@ -72,11 +79,46 @@ export default function GoLive() {
     navigator.clipboard?.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(null), 1500) })
   }
 
-  // Poll viewer count while live (mock fallback: analytics fetch)
+  const handleStart = async () => {
+    const token = getToken()
+    if (!token) return
+    setStarting(true)
+    const r = await startStream(token, { title, category: 'general' })
+    setStarting(false)
+    if (r.success) {
+      setLive(true)
+      setStream(r.stream)
+      setViewers(r.stream?.viewer_count || 0)
+      const info = await getLiveStreamInfo(token)
+      if (info.success) { setIngest(info.ingest); setDelivery(info.delivery) }
+      toast.success('Stream started — you are live!')
+    } else {
+      toast.error(r.error || 'Failed to start stream')
+    }
+  }
+
+  const handleEnd = async () => {
+    const token = getToken()
+    if (!token) return
+    setEnding(true)
+    const r = await endStream(token)
+    setEnding(false)
+    if (r.success) {
+      setLive(false)
+      setStream(null)
+      setViewers(0)
+      toast.success('Stream ended')
+    } else {
+      toast.error(r.error || 'Failed to end stream')
+    }
+  }
+
+  // Poll viewer count + status while live
   useEffect(() => {
     if (!live) return
-    const t = setInterval(() => {
-      getCreatorAnalytics(getToken() || '', 'overview', '7d').catch(() => {})
+    const t = setInterval(async () => {
+      const s = await getStreamStatus(getToken() || '')
+      if (s.success && s.live) setViewers(s.stream?.viewer_count || 0)
     }, 15000)
     return () => clearInterval(t)
   }, [live])
@@ -118,6 +160,54 @@ export default function GoLive() {
             {live ? 'Your stream is broadcasting to viewers.' : 'Use any streaming software (OBS, vMix, etc.) with the details below.'}
           </p>
 
+          {ingest?.protocols && (
+            <div className="mb-6">
+              <p className="text-xs text-on-surface-variant/60 mb-2 flex items-center gap-1.5"><Icon name="cast" size="sm" /> INGEST PROTOCOL</p>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {Object.entries(ingest.protocols).map(([p, v]: any) => (
+                  <button
+                    key={p}
+                    onClick={() => setProto(p)}
+                    className={`text-left rounded-xl border px-3 py-2.5 transition-colors ${proto === p ? 'border-primary-container bg-primary-container/10' : 'border-white/10 hover:border-white/25'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-on-surface">{v.label}</span>
+                      {proto === p && <Icon name="check_circle" size="sm" className="text-primary-container" />}
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant/60 mt-0.5">{v.note}</p>
+                  </button>
+                ))}
+              </div>
+              <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+                <p className="text-xs text-on-surface-variant/60 mb-2 flex items-center gap-1.5"><Icon name="link" size="sm" /> {ingest.protocols[proto]?.label} URL</p>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="text-sm text-on-surface break-all font-mono">{ingest.protocols[proto]?.url}</code>
+                  <button onClick={() => copy(ingest.protocols[proto]?.url || '', 'proto')} className="shrink-0 flex items-center gap-1 text-xs text-primary-container hover:underline"><Icon name={copied === 'proto' ? 'check' : 'content_copy'} size="sm" /> {copied === 'proto' ? 'Copied' : 'Copy'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {live && delivery && (
+            <div className="mb-6">
+              <p className="text-xs text-on-surface-variant/60 mb-2 flex items-center gap-1.5"><Icon name="play_circle" size="sm" /> DELIVERY (viewers)</p>
+              <div className="space-y-2">
+                <DeliveryRow label="LL-HLS" url={delivery.hls} copy={copy} copied={copied} />
+                <DeliveryRow label="LL-DASH" url={delivery.dash} copy={copy} copied={copied} />
+                <DeliveryRow label="HTTP-FLV" url={delivery.flv} copy={copy} copied={copied} />
+                <DeliveryRow label="WebRTC" url={delivery.webrtc} copy={copy} copied={copied} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 mb-6">
+            {live ? (
+              <Button onClick={handleEnd} loading={ending} className="bg-red-500/20 text-red-300">End Stream</Button>
+            ) : (
+              <Button onClick={handleStart} loading={starting} className="bg-red-500 text-white">Go Live</Button>
+            )}
+          </div>
+
           {!live && (
             <div className="mb-5">
               <label className="text-on-surface-variant text-sm mb-1.5 block">Stream title</label>
@@ -148,13 +238,13 @@ export default function GoLive() {
         </div>
 
         <div className="bg-surface-container-high border border-white/5 rounded-xl p-6">
-          <h3 className="font-label-md text-label-md text-on-surface mb-3 flex items-center gap-2"><Icon name="tips_and_updates" className="text-primary-container" /> How to go live (OBS)</h3>
+          <h3 className="font-label-md text-label-md text-on-surface mb-3 flex items-center gap-2"><Icon name="tips_and_updates" className="text-primary-container" /> How to go live</h3>
           <ol className="space-y-2 text-sm text-on-surface-variant pl-1 list-decimal list-inside">
             <li>Open OBS Studio or your streaming software.</li>
-            <li>Go to Settings &gt; Stream and choose <span className="text-on-surface">Custom</span>.</li>
-            <li>Paste the <span className="text-on-surface">Stream URL</span> and <span className="text-on-surface">Stream Key</span> above.</li>
-            <li>Set your output to match the platform&apos;s recommended bitrate (4500 kbps, 1080p).</li>
-            <li>Press <span className="text-on-surface">Start Streaming</span> — your stream appears in the live area automatically.</li>
+            <li>Pick an <span className="text-on-surface">ingest protocol</span> above — <span className="text-on-surface">RTMP/RTMPS</span> for desktop, <span className="text-on-surface">SRT</span> for shaky mobile networks, or <span className="text-on-surface">WebRTC</span> for sub-second interactivity.</li>
+            <li>In Settings &gt; Stream, paste the selected <span className="text-on-surface">protocol URL</span> and your <span className="text-on-surface">Stream Key</span>.</li>
+            <li>Set your output to 4500 kbps at 1080p.</li>
+            <li>Press <span className="text-on-surface">Go Live</span> — viewers receive <span className="text-on-surface">LL-HLS / LL-DASH</span> (2–5s latency) or <span className="text-on-surface">WebRTC</span> for instant playback.</li>
           </ol>
         </div>
       </div>
@@ -166,6 +256,20 @@ export default function GoLive() {
           <Button onClick={handleRegenerate} loading={regenerating} className="bg-amber-500/20 text-amber-300">Regenerate</Button>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+function DeliveryRow({ label, url, copy, copied }: { label: string; url: string; copy: (t: string, l: string) => void; copied: string | null }) {
+  return (
+    <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-on-surface-variant/60 shrink-0">{label}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <code className="text-xs text-on-surface break-all font-mono">{url}</code>
+          <button onClick={() => copy(url, label)} className="shrink-0 flex items-center gap-1 text-xs text-primary-container hover:underline"><Icon name={copied === label ? 'check' : 'content_copy'} size="sm" /> {copied === label ? 'Copied' : 'Copy'}</button>
+        </div>
+      </div>
     </div>
   )
 }

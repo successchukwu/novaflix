@@ -71,7 +71,7 @@ class MediaItem {
           .toList(),
       premium: json['premium'] as bool? ?? false,
       promoted: json['promoted'] as bool? ?? false,
-      trailerKey: json['trailer_key'] as String?,
+      trailerKey: (json['trailer_key'] as String?) ?? (json['trailerKey'] as String?),
       source: json['source'] as String?,
     );
   }

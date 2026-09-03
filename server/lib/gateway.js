@@ -28,7 +28,7 @@ async function flutterwaveApi(method, path, data) {
   })
 }
 
-export async function initializePayment({ gateway, email, amount, reference, callbackUrl, metadata }) {
+export async function initializePayment({ gateway, email, amount, reference, callbackUrl, metadata, currency = 'NGN' }) {
   if (gateway === 'paystack') {
     const paystack = await getPaystack()
     if (!paystack) return { success: false, error: 'Paystack not configured' }
@@ -50,7 +50,7 @@ export async function initializePayment({ gateway, email, amount, reference, cal
       const response = await flutterwaveApi('POST', '/payments', {
         tx_ref: reference,
         amount,
-        currency: 'NGN',
+        currency,
         redirect_url: callbackUrl || `${CALLBACK_URL}?reference=${reference}`,
         customer: { email },
         customizations: { title: 'NovaFlix' },

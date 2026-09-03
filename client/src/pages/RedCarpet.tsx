@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getEvents, getToken, purchaseEventTicket, getMyTickets } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function RedCarpet() {
   const [events, setEvents] = useState<any[]>([])
@@ -96,7 +97,7 @@ export default function RedCarpet() {
                       <p className="text-label-sm text-on-surface-variant mb-1">by {ev.creator_name}</p>
                       <p className="text-body-sm text-on-surface-variant line-clamp-2 mb-3">{ev.description}</p>
                       <div className="flex items-center justify-between">
-                        <span className="font-label-md text-on-surface">{ev.ticket_price > 0 ? `₦${parseFloat(ev.ticket_price).toLocaleString()}` : 'Free'}</span>
+                        <span className="font-label-md text-on-surface">{ev.ticket_price > 0 ? formatCurrency(parseFloat(ev.ticket_price)) : 'Free'}</span>
                         {hasTicket(ev.id) ? (
                           <span className="flex items-center gap-1 text-label-sm text-green-400"><Icon name="check_circle" className="text-sm" />Got Ticket</span>
                         ) : (

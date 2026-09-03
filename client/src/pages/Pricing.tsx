@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { initializePayment, getGatewayInfo } from '../lib/auth'
+import { initializePayment, getGatewayInfo, validatePromo } from '../lib/auth'
+import { formatCurrency, getCurrencySymbol } from '../lib/currency'
 import Button from '../components/ui/Button'
 import { useToast } from '../components/ui/Toast'
 import Icon from '../components/ui/Icon'
 import Badge from '../components/ui/Badge'
+import Input from '../components/ui/Input'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -145,6 +147,7 @@ export default function Pricing() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const toast = useToast()
+  const [searchParams] = useSearchParams()
   const [plans, setPlans] = useState<PlanData[]>(defaultPlans)
   const [selectedPlan, setSelectedPlan] = useState('standard')
   const [gateways, setGateways] = useState<{ paystack: { configured: boolean; publicKey: string }; flutterwave: { configured: boolean; publicKey: string } } | null>(null)
@@ -152,6 +155,16 @@ export default function Pricing() {
   const [modalPlan, setModalPlan] = useState<string | null>(null)
   const [modalGateway, setModalGateway] = useState<'paystack' | 'flutterwave'>('flutterwave')
   const [modalLoading, setModalLoading] = useState(false)
+  const [promoCode, setPromoCode] = useState('')
+  const [promoValid, setPromoValid] = useState<null | { valid: boolean; discount?: number; total?: number; originalAmount?: number; error?: string }>(null)
+  const [promoApplying, setPromoApplying] = useState(false)
+
+  useEffect(() => {
+    const urlPromo = searchParams.get('code')
+    if (urlPromo) {
+      setPromoCode(urlPromo.toUpperCase())
+    }
+  }, [searchParams])
 
   useEffect(() => {
     fetch(`${API_BASE}/payment/pricing`).then(r => r.json()).then((data: any) => {
@@ -185,13 +198,29 @@ export default function Pricing() {
     if (!modalPlan) return
     setModalLoading(true)
     const token = localStorage.getItem('novaflix-token') || ''
-    const res = await initializePayment(token, modalPlan, modalGateway)
+    const res = await initializePayment(token, modalPlan, modalGateway, promoValid?.valid ? promoCode : undefined)
     setModalLoading(false)
     setShowModal(false)
     if (res.success && res.authorization_url) {
       window.location.href = res.authorization_url
     } else {
       toast.error(res.error || 'Payment failed')
+    }
+  }
+
+  const applyPromoCode = async () => {
+    if (!promoCode.trim() || !modalPlan) return
+    setPromoApplying(true)
+    setPromoValid(null)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await validatePromo(token, promoCode.trim().toUpperCase(), modalPlan)
+    setPromoApplying(false)
+    if (res.success && res.valid) {
+      setPromoValid({ valid: true, discount: res.discount, total: res.total, originalAmount: res.originalAmount })
+      toast.success('Promo code applied!')
+    } else {
+      setPromoValid({ valid: false, error: res.error || 'Invalid promo code' })
+      toast.error(res.error || 'Invalid promo code')
     }
   }
 
@@ -216,7 +245,7 @@ export default function Pricing() {
               <h3 className="text-headline-md mb-1">Free</h3>
               <p className="font-label-sm text-label-sm text-on-surface-variant">Try it out</p>
               <div className="mt-4">
-                <span className="text-headline-lg font-bold">₦0</span>
+                <span className="text-headline-lg font-bold">{formatCurrency(0)}</span>
                 <span className="text-on-surface-variant text-body-md">/month</span>
               </div>
             </div>
@@ -333,6 +362,53 @@ export default function Pricing() {
             <p className="text-body-md text-on-surface-variant mb-6">
               {plans.find(p => p.id === modalPlan)?.name} — {plans.find(p => p.id === modalPlan)?.price}/month
             </p>
+
+            <div className="mb-6">
+              <label className="block text-sm mb-2">
+                <span className="text-on-surface-variant">Promo code</span>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    value={promoCode}
+                    onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoValid(null); }}
+                    placeholder="Enter promo code"
+                    className="flex-1"
+                    disabled={promoApplying}
+                  />
+                  <Button
+                    onClick={applyPromoCode}
+                    loading={promoApplying}
+                    disabled={!promoCode.trim() || promoApplying}
+                    className="whitespace-nowrap"
+                    size="sm"
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {promoValid?.valid && (
+                  <div className="mt-2 text-sm text-green-400">Promo applied! You save {promoValid.discount ? formatCurrency(promoValid.discount) : ''}</div>
+                )}
+                {promoValid?.valid === false && (
+                  <div className="mt-2 text-sm text-red-400">{promoValid.error}</div>
+                )}
+              </label>
+            </div>
+
+            {promoValid?.valid && (
+              <div className="mb-4 p-4 bg-surface-container rounded-xl border border-outline-variant/30">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-on-surface-variant">Original price</span>
+                  <span className="text-on-surface">{formatCurrency(promoValid.originalAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm mb-2 text-green-400">
+                  <span className="text-on-surface-variant">Discount</span>
+                  <span className="font-bold">-{formatCurrency(promoValid.discount || 0)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg border-t border-white/10 pt-2">
+                  <span className="text-on-surface">Total to pay</span>
+                  <span className="text-primary">{formatCurrency(promoValid.total || 0)}</span>
+                </div>
+              </div>
+            )}
 
             <p className="font-label-md text-label-sm text-on-surface-variant mb-3">Select payment method</p>
 

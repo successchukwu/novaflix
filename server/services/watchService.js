@@ -1,7 +1,6 @@
 import pool from '../config/database.js';
 import { creditPPM } from './walletService.js';
 import { refreshBaselineVPM } from './ppmService.js';
-import { personaService } from './personaService.js';
 
 const HEARTBEAT_INTERVAL = 30000;
 const pendingHeartbeats = new Map();

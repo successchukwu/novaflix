@@ -1,3 +1,4 @@
+import pool from '../config/database.js'
 import { getAllUsers, getPlatformStats, getAllUploads, findUserById, updateUser, getAllNewsletterEmails, getUsersByPlans, getUsersByRoles, createNotificationsBulk } from '../db.js'
 import { sendNewsletterEmail, sendAnnouncementEmail } from '../services/emailService.js'
 import { notifyUser, broadcastFeed } from '../services/realtime.js'
@@ -378,6 +379,7 @@ import {
   getSubscriberPlanBreakdown, getChurnStats, getPlanCounts, getTopViewsByType,
   getAdminSessionsCount, adminListUploads, adminUpdateUpload, getAllShorts,
   getAllTransactions, getAllSubscriptions, createPromoCode, listPromoCodes,
+  updatePromoCode, deletePromoCode, getPromoCodeById,
   listBanners, createBanner, listAudioLibrary, createAudioTrack,
   getFeedSettingsAll, setFeedSettings, listCreatorApplications,
   getForumModerationItems, updateReportStatus, deleteReview,
@@ -468,13 +470,68 @@ export async function promoList(req, res) {
 
 export async function promoCreate(req, res) {
   try {
-    const { code, plan, discountPct, maxUses } = req.body
+    const { code, plan, discountType = 'pct', discountValue = 0, maxUses = 0, expiresAt = null, minAmount = 0, applyToAllPlans = false, allowedIps = [], allowedPhones = [], country = null, startsAt = null, usagePerUser = 0, mode = 'one_time' } = req.body
     if (!code) return res.status(400).json({ error: 'code required' })
-    const created = await createPromoCode({ code: String(code).toUpperCase(), plan, discountPct, maxUses })
+    const created = await createPromoCode({ code: String(code).toUpperCase(), plan, discountType, discountValue, maxUses, expiresAt, minAmount, applyToAllPlans, allowedIps, allowedPhones, country, startsAt, usagePerUser, mode })
     if (!created) return res.status(409).json({ error: 'Code already exists' })
     await logAdminAudit({ actor: req.userId, action: 'promo.create', entity: 'promo', entityId: created.id })
     broadcastFeed({ type: 'admin:promo.created', promo: created, timestamp: Date.now() })
     res.json({ success: true, code: created })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function promoUpdate(req, res) {
+  try {
+    const { id } = req.params
+    const updates = req.body
+    const updated = await updatePromoCode(id, updates)
+    if (!updated) return res.status(404).json({ error: 'Promo code not found' })
+    await logAdminAudit({ actor: req.userId, action: 'promo.update', entity: 'promo', entityId: id })
+    broadcastFeed({ type: 'admin:promo.updated', promo: updated, timestamp: Date.now() })
+    res.json({ success: true, code: updated })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function promoDelete(req, res) {
+  try {
+    const { id } = req.params
+    await deletePromoCode(id)
+    await logAdminAudit({ actor: req.userId, action: 'promo.delete', entity: 'promo', entityId: id })
+    broadcastFeed({ type: 'admin:promo.deleted', promoId: id, timestamp: Date.now() })
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function promoStats(req, res) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pc.*, 
+        (SELECT COUNT(*) FROM promo_redemptions WHERE promo_id = pc.id) as redemptions,
+        (SELECT SUM(original_amount) FROM promo_redemptions WHERE promo_id = pc.id) as total_original,
+        (SELECT SUM(discounted_amount) FROM promo_redemptions WHERE promo_id = pc.id) as total_discounted
+       FROM promo_codes pc ORDER BY pc.created_at DESC`
+    )
+    res.json({ success: true, codes: rows })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function promotionsSettingsGet(req, res) {
+  try {
+    const rows = await getFeedSettingsAll()
+    const settings = {}
+    for (const r of rows) settings[r.key] = r.value
+    res.json({ success: true, settings })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function promotionsSettingsPut(req, res) {
+  try {
+    const { key, value } = req.body
+    if (!key) return res.status(400).json({ error: 'key required' })
+    await setFeedSettings(key, value || {})
+    await logAdminAudit({ actor: req.userId, action: 'promotions.settings', entity: 'promotions_settings', meta: { key } })
+    broadcastFeed({ type: 'admin:promotions.settings.changed', key, value, timestamp: Date.now() })
+    res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
@@ -558,5 +615,42 @@ export async function creatorStudio(req, res) {
     const safe = creators.map(u => ({ ...u, password: undefined }))
     res.json({ success: true, creators: safe })
   } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+// Unified PPM config: single admin-set base_rate per creator (source of truth for payouts).
+export async function getCreatorPPM(req, res) {
+  try {
+    const { creatorId } = req.params
+    const { pool } = await import('../db.js')
+    const { rows } = await pool.query(
+      `SELECT creator_id, base_rate, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at
+       FROM creator_ppm_config WHERE creator_id = $1`,
+      [creatorId]
+    )
+    res.json({ success: true, config: rows[0] || { creator_id: creatorId, base_rate: 10.00 } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function setCreatorPPM(req, res) {
+  try {
+    const { creatorId } = req.params
+    const { baseRate } = req.body
+    if (baseRate === undefined || baseRate === null || isNaN(Number(baseRate))) {
+      return res.status(400).json({ error: 'baseRate required (number)' })
+    }
+    const { pool } = await import('../db.js')
+    const { rows } = await pool.query(
+      `INSERT INTO creator_ppm_config (creator_id, base_rate, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (creator_id) DO UPDATE SET base_rate = $2, updated_at = NOW()
+       RETURNING creator_id, base_rate, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at`,
+      [creatorId, Number(baseRate)]
+    )
+    res.json({ success: true, config: rows[0] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 }
 

@@ -21,6 +21,7 @@ import payoutRoutes from './payoutRoutes.js'
 import adRoutes from './adRoutes.js'
 import sessionRoutes from './sessionRoutes.js'
 import hooksRoutes from './hooksRoutes.js'
+import liveRoutes from './liveRoutes.js'
 import campaignRoutes from './campaignRoutes.js'
 import affiliateRoutes from './affiliateRoutes.js'
 import membershipRoutes from './membershipRoutes.js'
@@ -70,6 +71,7 @@ router.use('/payouts', payoutRoutes)
 router.use('/ads', adRoutes)
 router.use('/sessions', sessionRoutes)
 router.use('/hooks', hooksRoutes)
+router.use('/streams', liveRoutes)
 router.use('/campaigns', campaignRoutes)
 router.use('/affiliate', affiliateRoutes)
 router.use('/memberships', membershipRoutes)

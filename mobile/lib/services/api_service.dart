@@ -257,6 +257,7 @@ class ApiService {
     int? minVotes,
     String? withCompanies,
     String? withOriginalLanguage,
+    String? withOriginCountry,
     String? primaryReleaseDateLte,
   }) => get(
     '/discover',
@@ -268,9 +269,12 @@ class ApiService {
       if (minVotes != null) 'min_votes': minVotes,
       if (withCompanies != null) 'with_companies': withCompanies,
       if (withOriginalLanguage != null) 'with_original_language': withOriginalLanguage,
+      if (withOriginCountry != null) 'with_origin_country': withOriginCountry,
       if (primaryReleaseDateLte != null) 'primary_release_date_lte': primaryReleaseDateLte,
     },
   );
+  Future<Response> getNollywood({int? page}) => getDiscover(type: 'movie', withOriginCountry: 'NG', withOriginalLanguage: 'en', sortBy: 'popularity.desc', page: page);
+  Future<Response> getHollywood({int? page}) => getDiscover(type: 'movie', withOriginCountry: 'US', sortBy: 'popularity.desc', page: page);
   Future<Response> getHooksFeed({int? page}) =>
       get('/hooks', params: {if (page != null) 'page': page});
 
@@ -516,6 +520,45 @@ class ApiService {
     };
     final resp = await _dio.get<ResponseBody>(
       url.startsWith('http') ? url : baseUrl + url,
+      options: Options(
+        responseType: ResponseType.stream,
+        headers: headers,
+        followRedirects: true,
+      ),
+    );
+    final stream = resp.data?.stream;
+    if (stream == null) return const Stream.empty();
+    return stream.map((chunk) {
+      if (chunk is Uint8List) return chunk;
+      return Uint8List.fromList(chunk);
+    });
+  }
+
+  /// Stream via server ffmpeg download endpoint (real MP4, not HLS playlist)
+  Future<Stream<Uint8List>> downloadFileStream({
+    required String url,
+    String? title,
+    String? variant,
+    bool compress = false,
+  }) async {
+    final token = await _storage.read(key: _tokenKey);
+    final cToken = await _storage.read(key: _creatorTokenKey);
+    final deviceId = await getDeviceId();
+    final headers = <String, dynamic>{
+      if (token != null) 'Authorization': 'Bearer $token',
+      if (cToken != null) 'Authorization': 'Bearer $cToken',
+    };
+    final resp = await _dio.get<ResponseBody>(
+      '/download',
+      queryParameters: {
+        'url': url,
+        if (title != null) 'title': title,
+        if (variant != null) 'variant': variant,
+        'compress': compress.toString(),
+        'platform': 'android',
+        'deviceId': deviceId,
+        'deviceName': 'NovaFlix Mobile',
+      },
       options: Options(
         responseType: ResponseType.stream,
         headers: headers,

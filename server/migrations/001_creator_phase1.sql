@@ -1,14 +1,15 @@
 -- Phase 1: Creator Platform Foundation
 -- Wallet, Claims, PPM, Baseline VPM, Bank Codes Audit
 
--- 1. Creator claim requests (Persona KYC)
+-- 1. Creator claim requests (social OAuth verification)
 CREATE TABLE IF NOT EXISTS creator_claim_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   tmdb_person_id INT NOT NULL,
   display_name VARCHAR(255),
-  persona_inquiry_id VARCHAR(255),
-  persona_template_id VARCHAR(255),
+  verification_provider VARCHAR(32),
+  social_handle VARCHAR(255),
+  social_profile_url TEXT,
   kyc_status VARCHAR(20) DEFAULT 'pending', -- pending, approved, denied, expired
   kyc_data JSONB,
   claim_status VARCHAR(20) DEFAULT 'pending', -- pending, approved, denied
@@ -17,6 +18,22 @@ CREATE TABLE IF NOT EXISTS creator_claim_requests (
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE (tmdb_person_id)
 );
+
+-- Social OAuth identity columns (provider-linked logins for claim verification)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS youtube_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twitch_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255) UNIQUE;
+
+-- Migrate existing claims: drop legacy Persona columns
+ALTER TABLE creator_claim_requests ADD COLUMN IF NOT EXISTS verification_provider VARCHAR(32);
+ALTER TABLE creator_claim_requests ADD COLUMN IF NOT EXISTS social_handle VARCHAR(255);
+ALTER TABLE creator_claim_requests ADD COLUMN IF NOT EXISTS social_profile_url TEXT;
+ALTER TABLE creator_claim_requests DROP COLUMN IF EXISTS persona_inquiry_id;
+ALTER TABLE creator_claim_requests DROP COLUMN IF EXISTS persona_template_id;
 
 -- 2. Wallet (NGN only, real-time)
 ALTER TABLE creator_profiles 
@@ -103,3 +120,40 @@ CREATE INDEX IF NOT EXISTS idx_creator_wallet_transactions_type ON creator_walle
 
 -- 9. Update users table for claimed creator profile link
 ALTER TABLE users ADD COLUMN IF NOT EXISTS claimed_creator_profile_id UUID REFERENCES creator_profiles(id) ON DELETE SET NULL;
+
+-- 10. Promo codes (discounts & promotions)
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(40) UNIQUE NOT NULL,
+  plan VARCHAR(20) NOT NULL DEFAULT 'premium',
+  discount_type VARCHAR(10) NOT NULL DEFAULT 'pct' CHECK (discount_type IN ('pct', 'fixed')),
+  discount_value NUMERIC(10,2) NOT NULL DEFAULT 0,
+  min_amount INTEGER DEFAULT 0,
+  apply_to_all_plans BOOLEAN DEFAULT FALSE,
+  allowed_ips TEXT[],
+  allowed_phones TEXT[],
+  country VARCHAR(5),
+  starts_at TIMESTAMP,
+  usage_per_user INTEGER DEFAULT 0,
+  mode VARCHAR(10) NOT NULL DEFAULT 'one_time' CHECK (mode IN ('one_time', 'recurring')),
+  max_uses INTEGER DEFAULT 0,
+  uses INTEGER DEFAULT 0,
+  active BOOLEAN DEFAULT TRUE,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  promo_id UUID NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan VARCHAR(20) NOT NULL,
+  original_amount INTEGER NOT NULL,
+  discounted_amount INTEGER NOT NULL,
+  ip VARCHAR(45),
+  phone VARCHAR(30),
+  redeemed_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 11. Default currency setting
+INSERT INTO feed_settings (key, value) VALUES ('default_currency', '"NGN"') ON CONFLICT (key) DO NOTHING;

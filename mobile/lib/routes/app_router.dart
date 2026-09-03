@@ -46,6 +46,13 @@ import '../screens/admin_asset_qc_screen.dart';
 import '../screens/admin_filters_screen.dart';
 import '../screens/admin_localization_screen.dart';
 import '../screens/admin_campaigns_screen.dart';
+import '../screens/creator_wallet_screen.dart';
+import '../screens/creator_ppm_settings_screen.dart';
+import '../screens/creator_onboarding_screen.dart';
+import '../screens/creator_claim_start_screen.dart';
+import '../screens/creator_claim_verify_screen.dart';
+import '../screens/creator_claim_status_screen.dart';
+import '../screens/offline_play_screen.dart';
 import '../screens/community_screen.dart';
 import '../screens/live_events_screen.dart';
 import '../screens/event_detail_screen.dart';
@@ -85,10 +92,13 @@ final _publicRoutes = <String>{
   '/landing',
   '/login',
   '/forgot-password',
+  '/reset-password',
   '/register',
   '/verify-email',
   '/profiles',
   '/creator/login',
+  '/oauth/callback',
+  '/download-app',
   '/search',
   '/search-results',
   '/tv-shows',
@@ -107,6 +117,7 @@ final _publicRoutes = <String>{
   '/red-carpet',
   '/news',
   '/news-article',
+  '/creator/claim/start',
 };
 
 bool _isPublicRoute(String location) {
@@ -183,6 +194,23 @@ GoRouter appRouter(WidgetRef ref) {
         path: '/creator/login',
         builder: (_, __) => const CreatorLoginScreen(),
       ),
+      GoRoute(path: '/reset-password', builder: (_, s) => const ForgotPasswordScreen()),
+      GoRoute(path: '/oauth/callback', builder: (_, s) => const CreatorLoginScreen()),
+      GoRoute(path: '/download-app', builder: (_, s) => const StoreScreen()),
+      GoRoute(path: '/suspended', builder: (_, s) => const NotFoundScreen()),
+      GoRoute(path: '/creator/claim/start', builder: (_, s) => const ClaimStartScreen()),
+      GoRoute(
+        path: '/creator/claim/verify',
+        builder: (_, s) => ClaimVerifyScreen(claimId: s.uri.queryParameters['claimId'] ?? ''),
+      ),
+      GoRoute(
+        path: '/creator/claim/status/:claimId',
+        builder: (_, s) => ClaimStatusScreen(claimId: s.pathParameters['claimId'] ?? ''),
+      ),
+      GoRoute(path: '/creator/wallet', builder: (_, s) => const CreatorWalletScreen()),
+      GoRoute(path: '/creator/ppm', builder: (_, s) => const CreatorPPMSettingsScreen()),
+      GoRoute(path: '/creator/onboarding', builder: (_, s) => const CreatorOnboardingScreen()),
+      GoRoute(path: '/offline-play', builder: (ctx, s) => OfflinePlayScreen(key: s.pageKey)),
       GoRoute(
         path: '/watch',
         builder: (ctx, state) => WatchScreen(

@@ -106,10 +106,6 @@ export function useAdminRealTime() {
     'admin:promo.created': (data) => emitAdminEvent('admin:promo.created', data),
     'admin:banner.created': (data) => emitAdminEvent('admin:banner.created', data),
     'admin:feed.settings.changed': (data) => emitAdminEvent('admin:feed.settings.changed', data),
-    'admin:appeal.decided': (data) => emitAdminEvent('admin:appeal.decided', data),
-    'admin:creator.application.approved': (data) => emitAdminEvent('admin:creator.application.approved', data),
-    'admin:creator.application.denied': (data) => emitAdminEvent('admin:creator.application.denied', data),
-    'admin:report.resolved': (data) => emitAdminEvent('admin:report.resolved', data),
   })
 }
  

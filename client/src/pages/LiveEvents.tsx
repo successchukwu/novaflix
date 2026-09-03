@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getEvents, getToken } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function LiveEvents() {
   const [events, setEvents] = useState<any[]>([])
@@ -61,7 +62,7 @@ export default function LiveEvents() {
                 <p className="text-body-sm text-on-surface-variant line-clamp-2 mb-3">{ev.description}</p>
                 <div className="flex items-center justify-between">
                   <span className="font-label-md text-on-surface">
-                    {ev.ticket_price > 0 ? `₦${parseFloat(ev.ticket_price).toLocaleString()}` : 'Free'}
+                    {ev.ticket_price > 0 ? formatCurrency(parseFloat(ev.ticket_price)) : 'Free'}
                   </span>
                   {ev.total_tickets > 0 && (
                     <span className="text-label-xs text-on-surface-variant">{ev.available_tickets} left</span>

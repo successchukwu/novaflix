@@ -1,9 +1,10 @@
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid'
 import { createHash, createHmac } from 'crypto'
 import pool from '../config/database.js'
-import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans } from '../db.js'
+import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans, getDefaultCurrency } from '../db.js'
 import { initializePayment, verifyPayment, isConfigured } from '../lib/gateway.js'
 import { signToken } from './authController.js'
+import { validatePromo, computeDiscountedAmount, applyPromoToTransaction } from '../services/promoService.js'
 
 function verifyPaystackSignature(rawBody, signature, secret) {
   if (!secret) return false
@@ -70,7 +71,8 @@ async function creditReferralCommission(referredUserId, planSlug) {
 export async function listPricing(req, res) {
   try {
     const plans = await listPlans()
-    res.json({ success: true, plans, currency: 'NGN' })
+    const currency = await getDefaultCurrency()
+    res.json({ success: true, plans, currency })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -78,10 +80,24 @@ export async function listPricing(req, res) {
 
 export async function initialize(req, res) {
   try {
-    const { plan, gateway } = req.body
+    const { plan, gateway, promoCode } = req.body
     const planRow = await getPlanBySlug(plan)
-    const amount = planRow?.price
-    if (!amount) return res.status(400).json({ error: 'Invalid plan' })
+    const originalAmount = planRow?.price
+    if (!originalAmount) return res.status(400).json({ error: 'Invalid plan' })
+
+    let amount = originalAmount
+    let promo = null
+    let discount = 0
+
+    if (promoCode) {
+      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown'
+      const validation = await validatePromo(promoCode, { plan, ip, phone: req.user?.phone, userId: req.userId })
+      if (!validation.valid) return res.status(400).json({ error: validation.error })
+      promo = validation.promo
+      const computed = computeDiscountedAmount(originalAmount, promo)
+      amount = computed.total
+      discount = computed.discount
+    }
 
     const selectedGateway = gateway === 'flutterwave' ? 'flutterwave' : 'paystack'
     if (!isConfigured(selectedGateway)) {
@@ -97,7 +113,7 @@ export async function initialize(req, res) {
       plan,
       amount,
       status: 'pending',
-      metadata: { gateway: selectedGateway },
+      metadata: { gateway: selectedGateway, promoCode: promo?.code, originalAmount, discount, discountedAmount: amount },
     })
 
     const result = await initializePayment({
@@ -107,11 +123,38 @@ export async function initialize(req, res) {
       reference,
       callbackUrl: `${process.env.APP_URL || 'http://localhost:3000'}/payment/success?reference=${reference}&plan=${plan}`,
       metadata: { userId: req.userId, plan },
+      currency: await getDefaultCurrency(),
     })
 
     if (!result.success) return res.status(500).json({ error: result.error })
 
-    res.json({ success: true, authorization_url: result.authorization_url, reference, gateway: selectedGateway })
+    res.json({ success: true, authorization_url: result.authorization_url, reference, gateway: selectedGateway, originalAmount, discount, amount, promoCode: promo?.code })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function validatePromoCode(req, res) {
+  try {
+    const { code, plan } = req.body
+    if (!code || !plan) return res.status(400).json({ error: 'Code and plan required' })
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown'
+    const validation = await validatePromo(code, { plan, ip, phone: req.user?.phone, userId: req.userId })
+    if (!validation.valid) return res.json({ success: false, valid: false, error: validation.error })
+    const planRow = await getPlanBySlug(plan)
+    const originalAmount = planRow?.price || 0
+    const computed = computeDiscountedAmount(originalAmount, validation.promo)
+    res.json({
+      success: true,
+      valid: true,
+      originalAmount,
+      discount: computed.discount,
+      total: computed.total,
+      discountType: validation.promo.discount_type,
+      discountValue: validation.promo.discount_value,
+      isHighValue: computed.discount / originalAmount >= 0.8,
+      promo: { code: validation.promo.code, plan: validation.promo.plan }
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -139,22 +182,48 @@ export async function verify(req, res) {
     const result = await verifyPayment({ gateway, reference })
     if (result.success) {
       const planSlug = tx.plan || 'basic'
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       const sub = {
         id: uuidv4(),
         userId: req.userId,
         plan: tx.plan || 'basic',
         active: true,
         startedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        expiresAt,
       }
       await addSubscription(sub)
       await updateUser(req.userId, { plan: tx.plan || 'basic' })
       await updateTransactionByReference(reference, { status: 'success' })
       await creditReferralCommission(req.userId, tx.plan || 'basic')
 
+      if (tx.metadata?.promoCode) {
+        await applyPromoToTransaction(
+          { id: tx.metadata.promoCode, code: tx.metadata.promoCode },
+          {
+            userId: req.userId,
+            plan: tx.plan,
+            originalAmount: tx.metadata.originalAmount,
+            discountedAmount: tx.metadata.discountedAmount || tx.amount,
+            ip: req.ip,
+            phone: req.user?.phone,
+          }
+        )
+      }
+
       const token = signToken({ id: req.userId, email: req.user.email, role: req.user.role || 'user', plan: tx.plan || 'basic' })
 
-      res.json({ success: true, subscription: sub, gateway: tx.metadata?.gateway, plan: tx.plan || 'basic', token })
+      res.json({
+        success: true,
+        subscription: sub,
+        gateway: tx.metadata?.gateway,
+        plan: tx.plan || 'basic',
+        token,
+        planEndsAt: expiresAt,
+        promoCode: tx.metadata?.promoCode || null,
+        originalAmount: tx.metadata?.originalAmount || null,
+        discount: tx.metadata?.discount || null,
+        discountedAmount: tx.metadata?.discountedAmount || null,
+      })
     } else {
       res.json({ success: false, error: 'Payment not completed', status: result.status })
     }
@@ -291,4 +360,9 @@ export async function gatewayInfo(req, res) {
     paystack: { configured: isConfigured('paystack'), publicKey: process.env.PAYSTACK_PUBLIC_KEY || '' },
     flutterwave: { configured: isConfigured('flutterwave'), publicKey: process.env.FLW_PUBLIC_KEY || '' },
   })
+}
+
+export async function publicSettings(req, res) {
+  const currency = await getDefaultCurrency()
+  res.json({ success: true, currency })
 }

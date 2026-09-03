@@ -6,6 +6,7 @@ import {
   withdraw, 
   getWithdrawalPreview 
 } from '../services/walletService.js';
+import pool from '../config/database.js';
 
 export async function getBalance(req, res) {
   try {
@@ -81,19 +82,6 @@ export async function getPPMRate(req, res) {
       tier: creatorTier,
       tierParams
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-}
-
-export async function updatePPMConfig(req, res) {
-  try {
-    const { baseRate } = req.body;
-    if (baseRate === undefined) return res.status(400).json({ error: 'baseRate required' });
-    
-    const { updateCreatorBaseRate } = await import('../services/creatorService.js');
-    const result = await updateCreatorBaseRate(req.userId, baseRate);
-    res.json({ success: true, config: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

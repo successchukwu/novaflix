@@ -23,11 +23,6 @@ export async function initializeCronJobs() {
     await tmdbSyncService.syncAllPeople(20); // 20 pages = 400 people
   });
 
-  // Every 5 minutes: Retry failed Persona webhooks
-  cronScheduler.schedule('webhook-retry', '*/5', '*', '*', '*', '*', async () => {
-    // Implementation in watchService
-  });
-
   // Every 10 minutes: Check pending withdrawal statuses
   cronScheduler.schedule('payout-status', '*/10', '*', '*', '*', '*', async () => {
     // Implementation in watchService

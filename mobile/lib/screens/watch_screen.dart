@@ -125,14 +125,21 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
 
   @override
   void dispose() {
-    _recordFinalPosition();
+    try {
+      _recordFinalPosition();
+    } catch (_) {}
     _exitFullscreen();
     super.dispose();
   }
 
   void _recordFinalPosition() {
     if (!mounted) return;
-    final auth = ref.read(authProvider);
+    AuthStatus authStatus;
+    try {
+      authStatus = ref.read(authProvider).status;
+    } catch (_) {
+      return;
+    }
     final detail = ref.read(_watchDetailsProvider(widget.movieId ?? 0)).valueOrNull;
     final minutes = (_lastPosition / 60).round();
     final entry = {
@@ -147,7 +154,7 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
       if (widget.episode != null) 'episode': int.tryParse(widget.episode!),
     };
     if (_lastPosition <= 0) return;
-    if (auth.status == AuthStatus.authenticated) {
+    if (authStatus == AuthStatus.authenticated) {
       ref.read(apiServiceProvider).recordWatch(entry).then((_) {}, onError: (_) {});
     }
     ref.read(storeProvider.notifier).updateProgress(

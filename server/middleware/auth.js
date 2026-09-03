@@ -48,7 +48,13 @@ export async function authenticateToken(req, res, next) {
         return res.status(403).json({ error: 'Account suspended', accountStatus: 'suspended' })
       }
     }
-    req.user = {
+    req.user = user ? {
+      ...user,
+      id: decoded.id,
+      email: user.email ?? decoded.email,
+      role,
+      plan,
+    } : {
       id: decoded.id,
       email: decoded.email,
       role,
@@ -62,6 +68,38 @@ export async function authenticateToken(req, res, next) {
 
 // Alias — most route modules import the auth guard under this name.
 export const authMiddleware = authenticateToken
+
+// Optional auth: attaches req.user / req.userId when a valid token is present,
+// but does not reject anonymous requests. Used by public live-stream endpoints.
+export async function optionalAuthMiddleware(req, res, next) {
+  const header = req.headers.authorization
+  if (!header || !header.startsWith('Bearer ')) {
+    req.user = null
+    req.userId = null
+    return next()
+  }
+  try {
+    const token = header.split(' ')[1]
+    const decoded = jwt.verify(token, JWT_SECRET)
+    req.userId = decoded.id
+    let plan = decoded.plan || 'free'
+    let role = decoded.role || 'viewer'
+    let user = null
+    try {
+      user = await findUserById(decoded.id)
+      if (user) {
+        plan = user.plan || 'free'
+        role = user.role || 'viewer'
+      }
+    } catch {}
+    req.user = user ? { id: user.id, name: user.name, email: user.email, avatar: user.avatar, plan, role, ...user } : { id: decoded.id, plan, role }
+    next()
+  } catch {
+    req.user = null
+    req.userId = null
+    next()
+  }
+}
 
 export function requireRole(...allowedRoles) {
   return (req, res, next) => {

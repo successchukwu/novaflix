@@ -10,7 +10,7 @@ export async function getPpmConfig(req, res) {
       `INSERT INTO creator_ppm_config (creator_id, movie_vpm, short_vpm, minimum_payout, auto_settle)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (creator_id) DO UPDATE SET creator_id = EXCLUDED.creator_id
-       RETURNING creator_id, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at`,
+       RETURNING creator_id, base_rate, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at`,
       [req.userId, DEFAULT_PPM.movie_vpm, DEFAULT_PPM.short_vpm, DEFAULT_PPM.minimum_payout, DEFAULT_PPM.auto_settle]
     )
     res.json({ success: true, config: rows[0] })
@@ -20,27 +20,21 @@ export async function getPpmConfig(req, res) {
   }
 }
 
+// PPM payout rate is admin-controlled (single source of truth: creator_ppm_config.base_rate).
+// Creators are read-only; this returns the current config without allowing rate changes.
 export async function savePpmConfig(req, res) {
   try {
-    const { movie_vpm, short_vpm, minimum_payout, auto_settle } = req.body || {}
     const { rows } = await pool.query(
-      `INSERT INTO creator_ppm_config (creator_id, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at)
-       VALUES ($1, COALESCE($2, 2.50), COALESCE($3, 1.20), COALESCE($4, 50.00), COALESCE($5, TRUE), NOW())
-       ON CONFLICT (creator_id) DO UPDATE SET
-         movie_vpm = EXCLUDED.movie_vpm,
-         short_vpm = EXCLUDED.short_vpm,
-         minimum_payout = EXCLUDED.minimum_payout,
-         auto_settle = EXCLUDED.auto_settle,
-         updated_at = NOW()
-       RETURNING creator_id, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at`,
-      [req.userId, movie_vpm != null ? movie_vpm : null, short_vpm != null ? short_vpm : null,
-       minimum_payout != null ? minimum_payout : null, auto_settle != null ? !!auto_settle : null]
+      `INSERT INTO creator_ppm_config (creator_id, movie_vpm, short_vpm, minimum_payout, auto_settle)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (creator_id) DO UPDATE SET creator_id = EXCLUDED.creator_id
+       RETURNING creator_id, base_rate, movie_vpm, short_vpm, minimum_payout, auto_settle, updated_at`,
+      [req.userId, DEFAULT_PPM.movie_vpm, DEFAULT_PPM.short_vpm, DEFAULT_PPM.minimum_payout, DEFAULT_PPM.auto_settle]
     )
-    notifyCreator(req.userId, 'content', { action: 'ppm-updated', config: rows[0] })
-    res.json({ success: true, config: rows[0] })
+    res.json({ success: true, config: rows[0], readOnly: true, message: 'PPM payout rate is set by the platform admin.' })
   } catch (err) {
     console.error('savePpmConfig error:', err.message)
-    res.status(500).json({ success: false, error: 'Failed to save PPM config' })
+    res.status(500).json({ success: false, error: 'Failed to load PPM config' })
   }
 }
 

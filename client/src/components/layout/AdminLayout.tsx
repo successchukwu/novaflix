@@ -56,6 +56,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/admin/announcements', label: 'Push Notifications', icon: 'notifications_active', perm: 'marketing.announce' },
       { to: '/admin/marketing', label: 'Promo & Banners', icon: 'campaign', perm: 'marketing.promo' },
+      { to: '/admin/promotions', label: 'Discounts & Promotions', icon: 'local_offer', perm: 'promotions.manage' },
     ],
   },
   {

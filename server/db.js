@@ -13,6 +13,13 @@ function rowToUser(row) {
     bio: row.bio || '',
     email_verified: row.email_verified,
     google_id: row.google_id,
+    facebook_id: row.facebook_id,
+    instagram_id: row.instagram_id,
+    tiktok_id: row.tiktok_id,
+    twitter_id: row.twitter_id,
+    youtube_id: row.youtube_id,
+    twitch_id: row.twitch_id,
+    discord_id: row.discord_id,
     last_login_at: row.last_login_at,
     createdAt: row.created_at,
     verified: row.verified,
@@ -45,12 +52,40 @@ export async function findUserByGoogleId(googleId) {
   return rowToUser(rows[0])
 }
 
+const SOCIAL_ID_COLUMNS = {
+  google: 'google_id',
+  facebook: 'facebook_id',
+  instagram: 'instagram_id',
+  tiktok: 'tiktok_id',
+  twitter: 'twitter_id',
+  youtube: 'youtube_id',
+  twitch: 'twitch_id',
+  discord: 'discord_id',
+}
+
+export function socialIdColumn(provider) {
+  return SOCIAL_ID_COLUMNS[provider] || null
+}
+
+export async function findUserBySocialId(provider, socialId) {
+  const col = socialIdColumn(provider)
+  if (!col) return null
+  const { rows } = await pool.query(`SELECT * FROM users WHERE ${col} = $1`, [socialId])
+  return rowToUser(rows[0])
+}
+
 export async function createUser(user) {
+  const cols = ['id', 'email', 'password', 'name', 'role', 'plan', 'avatar', 'bio', 'email_verified', 'google_id']
+  const mapped = [user.id, user.email, user.password, user.name, user.role || 'user', user.plan || 'free', user.avatar, user.bio || '', user.email_verified || false, user.google_id || null]
+  for (const [provider, col] of Object.entries(SOCIAL_ID_COLUMNS)) {
+    if (col === 'google_id') continue
+    const val = user[col]
+    if (val) { cols.push(col); mapped.push(val) }
+  }
+  const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ')
   const { rows } = await pool.query(
-    `INSERT INTO users (id, email, password, name, role, plan, avatar, bio, email_verified, google_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING *`,
-    [user.id, user.email, user.password, user.name, user.role || 'user', user.plan || 'free', user.avatar, user.bio || '', user.email_verified || false, user.google_id || null]
+    `INSERT INTO users (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+    mapped
   )
   return rowToUser(rows[0])
 }
@@ -2983,13 +3018,44 @@ export async function getAllSubscriptions() {
   return rows
 }
 
-export async function createPromoCode({ code, plan = 'premium', discountPct = 0, maxUses = 0, expiresAt = null }) {
+export async function createPromoCode({ code, plan = 'premium', discountType = 'pct', discountValue = 0, maxUses = 0, expiresAt = null, minAmount = 0, applyToAllPlans = false, allowedIps = [], allowedPhones = [], country = null, startsAt = null, usagePerUser = 0, mode = 'one_time' }) {
   const { rows } = await pool.query(
-    `INSERT INTO promo_codes (code, plan, discount_pct, max_uses, expires_at)
-     VALUES ($1,$2,$3,$4,$5) ON CONFLICT (code) DO NOTHING RETURNING *`,
-    [code, plan, discountPct, maxUses, expiresAt]
+    `INSERT INTO promo_codes (code, plan, discount_type, discount_value, max_uses, expires_at, min_amount, apply_to_all_plans, allowed_ips, allowed_phones, country, starts_at, usage_per_user, mode)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (code) DO NOTHING RETURNING *`,
+    [code, plan, discountType, discountValue, maxUses, expiresAt, minAmount, applyToAllPlans, allowedIps, allowedPhones, country, startsAt, usagePerUser, mode]
   )
   return rows[0]
+}
+
+export async function updatePromoCode(id, updates) {
+  const fields = []
+  const values = []
+  let param = 1
+  const allowed = ['plan', 'discount_type', 'discount_value', 'max_uses', 'expires_at', 'min_amount', 'apply_to_all_plans', 'allowed_ips', 'allowed_phones', 'country', 'starts_at', 'usage_per_user', 'mode', 'active']
+  for (const [key, val] of Object.entries(updates)) {
+    if (allowed.includes(key)) {
+      fields.push(`${key} = $${param}`)
+      values.push(val)
+      param++
+    }
+  }
+  if (fields.length === 0) return null
+  values.push(id)
+  const { rows } = await pool.query(
+    `UPDATE promo_codes SET ${fields.join(', ')} WHERE id = $${param} RETURNING *`,
+    values
+  )
+  return rows[0]
+}
+
+export async function deletePromoCode(id) {
+  await pool.query(`DELETE FROM promo_codes WHERE id = $1`, [id])
+  return true
+}
+
+export async function getPromoCodeById(id) {
+  const { rows } = await pool.query(`SELECT * FROM promo_codes WHERE id = $1`, [id])
+  return rows[0] || null
 }
 
 export async function listPromoCodes() {
@@ -3035,6 +3101,15 @@ export async function setFeedSettings(key, value) {
     [key, value]
   )
   return rows[0]
+}
+
+export async function getDefaultCurrency() {
+  const value = await getFeedSettingsValue('default_currency', 'NGN')
+  return typeof value === 'string' ? value : (value?.currency || 'NGN')
+}
+
+export async function setDefaultCurrency(currency) {
+  return setFeedSettings('default_currency', currency)
 }
 
 export async function listCreatorApplications() {

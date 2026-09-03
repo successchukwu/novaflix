@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getProducts, getToken, checkoutStore, verifyStoreOrder, getMyOrders } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function Store() {
   const [products, setProducts] = useState<any[]>([])
@@ -123,7 +124,7 @@ export default function Store() {
                   <p className="text-on-surface-variant/60 text-sm mt-1">{product.category}</p>
                   {product.creator_name && <p className="text-on-surface-variant/40 text-xs">by {product.creator_name}</p>}
                   <div className="flex items-center justify-between mt-3">
-                    <span className="text-lg font-bold text-primary-container">₦{parseFloat(product.price).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-primary-container">{formatCurrency(parseFloat(product.price))}</span>
                   </div>
                   <button
                     onClick={() => {
@@ -175,7 +176,7 @@ export default function Store() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-label-md text-on-surface truncate">{p.title}</p>
-                          <p className="text-label-sm text-on-surface-variant">₦{parseFloat(p.price).toLocaleString()} × {qty}</p>
+                          <p className="text-label-sm text-on-surface-variant">{formatCurrency(parseFloat(p.price))} × {qty}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={() => setCart(prev => ({ ...prev, [id]: Math.max(0, prev[id] - 1) }))} className="w-8 h-8 flex items-center justify-center rounded-lg bg-outline/10 text-on-surface-variant" aria-label="Decrease quantity"><Icon name="remove" /></button>
@@ -192,7 +193,7 @@ export default function Store() {
               <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-white/5 bg-surface-container-lowest">
                 <div className="flex items-center justify-between mb-4">
                   <span className="font-label-lg text-on-surface">Total</span>
-                  <span className="text-headline-sm font-bold text-primary-container">₦{cartTotal.toLocaleString()}</span>
+                  <span className="text-headline-sm font-bold text-primary-container">{formatCurrency(cartTotal)}</span>
                 </div>
                 <button onClick={handleCheckout} disabled={purchasing} className="w-full py-3 bg-primary-container text-on-primary-container rounded-xl font-label-md disabled:opacity-50">
                   {purchasing ? 'Processing...' : 'Checkout'}
@@ -221,7 +222,7 @@ export default function Store() {
                     <div key={o.id} className="bg-surface-container rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className={`text-label-xs px-2 py-0.5 rounded-full ${o.status === 'paid' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{o.status}</span>
-                        <span className="text-label-sm text-on-surface-variant">₦{parseFloat(o.total).toLocaleString()}</span>
+                        <span className="text-label-sm text-on-surface-variant">{formatCurrency(parseFloat(o.total))}</span>
                       </div>
                       <p className="text-label-xs text-on-surface-variant">{new Date(o.created_at).toLocaleDateString()}</p>
                       {o.items && o.items.length > 0 && (

@@ -5,7 +5,7 @@ import { createHash } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
 import {
-  findUserByEmail, findUserById, findUserByGoogleId, createUser, saveVerificationCode,
+  findUserByEmail, findUserById, findUserByGoogleId, findUserBySocialId, socialIdColumn, createUser, saveVerificationCode,
   verifyCode, updateUser, updateLastLogin, findDevice, upsertDevice, findKnownLocation,
   recordLocation, createRefreshToken, findRefreshToken, deleteRefreshToken,
   deleteAllRefreshTokens, addToBlocklist, isTokenBlocked, recordRateLimitAttempt,
@@ -14,6 +14,7 @@ import {
 } from '../db.js'
 import { sendVerificationCode, sendWelcomeEmail, sendLoginVerificationCode, sendPasswordResetEmail, isEmailConfigured } from '../services/emailService.js'
 import { resolveJwtSecret } from '../config/jwtSecret.js'
+import { buildAuthorizeUrl, exchangeCode, fetchProfile, isProviderConfigured, listProviders } from '../services/socialOAuthService.js'
 import { broadcastFeed } from '../services/realtime.js'
 
 const JWT_SECRET = resolveJwtSecret()
@@ -706,27 +707,41 @@ export async function resetPassword(req, res) {
 
 // ============ GOOGLE OAUTH ============
 
-export async function startGoogleAuth(req, res) {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  if (!clientId) {
-    return res.status(503).json({ error: 'Google Sign-In is not configured. Please try again later.' })
+export async function socialProviders(req, res) {
+  res.json({ providers: listProviders() })
+}
+
+export async function startSocialAuth(req, res) {
+  const provider = (req.params.provider || '').toLowerCase()
+  if (!isProviderConfigured(provider)) {
+    return res.status(503).json({ error: `${provider} Sign-In is not configured. Please try again later.` })
   }
 
   const redirectPath = sanitizeRedirectPath(req.query.redirect)
-  const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`
-  const state = jwt.sign({ purpose: 'google-oauth', path: redirectPath, ts: Date.now() }, JWT_SECRET, { expiresIn: '10m' })
+  const claimId = (req.query.claimId || '').toString()
+  const built = buildAuthorizeUrl(req, provider, redirectPath)
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    state,
-    access_type: 'online',
-    prompt: 'select_account',
+  if (!built) {
+    return res.status(400).json({ error: 'Unsupported provider.' })
+  }
+
+  res.cookie('social_oauth_state', built.state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.headers['x-forwarded-proto'] === 'https' || req.secure,
+    maxAge: 10 * 60 * 1000,
+    path: '/',
   })
-
-  res.cookie('google_oauth_state', state, {
+  if (built.verifier) {
+    res.cookie('social_oauth_verifier', built.verifier, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: req.headers['x-forwarded-proto'] === 'https' || req.secure,
+      maxAge: 10 * 60 * 1000,
+      path: '/',
+    })
+  }
+  res.cookie('social_oauth_claim', claimId, {
     httpOnly: true,
     sameSite: 'lax',
     secure: req.headers['x-forwarded-proto'] === 'https' || req.secure,
@@ -734,89 +749,81 @@ export async function startGoogleAuth(req, res) {
     path: '/',
   })
 
-  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+  res.redirect(built.url)
 }
 
-export async function googleCallback(req, res) {
+export async function socialCallback(req, res) {
   const appUrl = process.env.APP_URL || 'http://localhost:3000'
+  const provider = (req.params.provider || '').toLowerCase()
   const fail = (msg) => res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent(msg)}`)
 
   try {
     const { code, state, error } = req.query
+    if (error) return fail(`${provider} Sign-In was cancelled or failed.`)
 
-    if (error) return fail('Google Sign-In was cancelled or failed.')
-
-    const cookieState = parseCookies(req).google_oauth_state
+    const cookieState = parseCookies(req).social_oauth_state
     if (!code || !state || !cookieState || state !== cookieState) {
       return fail('Invalid sign-in request. Please try again.')
     }
 
     let statePayload
     try {
-      statePayload = jwt.verify(state, JWT_SECRET)
+      statePayload = JSON.parse(Buffer.from(state, 'base64url').toString('utf-8'))
     } catch {
       return fail('Sign-in request expired. Please try again.')
     }
-
-    const clientId = process.env.GOOGLE_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-    if (!clientId || !clientSecret) return fail('Google Sign-In is not configured. Please try again later.')
-
-    const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`
-
-    const tokenRes = await axios.post('https://oauth2.googleapis.com/token', new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    }).toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 15000,
-    })
-
-    const { id_token } = tokenRes.data
-    if (!id_token) return fail('Unable to verify your Google account.')
-
-    const profile = jwt.decode(id_token)
-    if (!profile || !profile.sub || !profile.email) return fail('Unable to read your Google account.')
-
-    if (profile.email_verified === false) {
-      return fail('Your Google email is not verified.')
+    if (statePayload.provider && statePayload.provider !== provider) {
+      return fail('Sign-in provider mismatch. Please try again.')
     }
 
-    let user = await findUserByGoogleId(profile.sub)
+    const verifier = parseCookies(req).social_oauth_verifier || null
+    let tokens
+    try {
+      tokens = await exchangeCode(req, provider, code, verifier)
+    } catch (err) {
+      console.error(`[auth] ${provider} token exchange error:`, err.message)
+      return fail(`${provider} Sign-In failed. Please try again.`)
+    }
+    if (!tokens || (!tokens.access_token && !tokens.id_token)) {
+      return fail(`Unable to verify your ${provider} account.`)
+    }
+
+    const profile = await fetchProfile(req, provider, tokens)
+    if (!profile || !profile.id) return fail(`Unable to read your ${provider} account.`)
+
+    let user = await findUserBySocialId(provider, profile.id)
     let isNew = false
 
+    const socialIdCol = socialIdColumn(provider)
     if (!user) {
-      const existing = await findUserByEmail(profile.email)
+      const existing = profile.email ? await findUserByEmail(profile.email) : null
       if (existing) {
-        await updateUser(existing.id, { google_id: profile.sub, email_verified: true, avatar: existing.avatar || profile.picture || null })
+        const patch = { email_verified: true }
+        if (socialIdCol) patch[socialIdCol] = profile.id
+        if (!existing.avatar && profile.avatar) patch.avatar = profile.avatar
+        await updateUser(existing.id, patch)
         user = await findUserById(existing.id)
       } else {
         isNew = true
         user = {
           id: uuidv4(),
-          email: profile.email,
-          name: profile.name || profile.given_name || profile.email.split('@')[0],
+          email: profile.email || `${provider}_${profile.id}@social.local`,
           password: null,
+          name: profile.name || profile.handle || `${provider} user`,
           role: 'viewer',
           plan: 'free',
-          avatar: profile.picture || null,
+          avatar: profile.avatar || null,
           bio: '',
           email_verified: true,
-          google_id: profile.sub,
+          google_id: provider === 'google' ? profile.id : null,
         }
+        user[socialIdCol] = profile.id
         await createUser(user)
       }
     }
 
-    if (user.role === 'banned') {
-      return res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent('Account banned')}`)
-    }
-    if (user.suspended_until && new Date(user.suspended_until).getTime() > Date.now()) {
-      return res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent('Account suspended')}`)
-    }
+    if (user.role === 'banned') return fail('Account banned')
+    if (user.suspended_until && new Date(user.suspended_until).getTime() > Date.now()) return fail('Account suspended')
 
     await recordLogin(req, user, undefined, undefined, undefined, undefined)
 
@@ -826,15 +833,31 @@ export async function googleCallback(req, res) {
     const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
     await createRefreshToken(user.id, refreshTokenHash, refreshExpiresAt)
 
-    res.clearCookie('google_oauth_state')
+    const statePath = sanitizeRedirectPath(statePayload.path)
+    const claimId = parseCookies(req).social_oauth_claim || statePayload.claimId || ''
 
-    const redirectPath = sanitizeRedirectPath(statePayload.path)
-    const redirectionUrl = getRedirectionUrl(user.role)
-    const finalRedirect = isNew ? `${appUrl}/oauth/callback?token=${encodeURIComponent(accessToken)}&redirect=${encodeURIComponent(redirectionUrl)}&new=1` : `${appUrl}/oauth/callback?token=${encodeURIComponent(accessToken)}&redirect=${encodeURIComponent(redirectionUrl)}&new=0`
+    res.clearCookie('social_oauth_state')
+    res.clearCookie('social_oauth_claim')
+    res.clearCookie('social_oauth_verifier')
 
+    const redirectPath = claimId
+      ? `/creator/claim/status/${encodeURIComponent(claimId)}`
+      : (statePath || getRedirectionUrl(user.role))
+
+    const finalRedirect = `${appUrl}/oauth/callback?token=${encodeURIComponent(accessToken)}&redirect=${encodeURIComponent(redirectPath)}&new=${isNew ? 1 : 0}&provider=${encodeURIComponent(provider)}`
     res.redirect(finalRedirect)
   } catch (err) {
-    console.error('[auth] Google OAuth callback error:', err.message)
-    fail('Google Sign-In failed. Please try again.')
+    console.error(`[auth] ${provider} OAuth callback error:`, err.message)
+    fail(`${provider} Sign-In failed. Please try again.`)
   }
+}
+
+export async function startGoogleAuth(req, res) {
+  req.params = { ...req.params, provider: 'google' }
+  return startSocialAuth(req, res)
+}
+
+export async function googleCallback(req, res) {
+  req.params = { ...req.params, provider: 'google' }
+  return socialCallback(req, res)
 }

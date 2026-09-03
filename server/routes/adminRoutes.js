@@ -45,8 +45,13 @@ router.get('/transactions', requirePermission('finance.view'), adminController.t
 router.get('/subscriptions', requirePermission('finance.view'), adminController.subscriptions)
 router.get('/promo', requirePermission('marketing.promo'), adminController.promoList)
 router.post('/promo', requirePermission('marketing.promo'), adminController.promoCreate)
+router.patch('/promo/:id', requirePermission('marketing.promo'), adminController.promoUpdate)
+router.delete('/promo/:id', requirePermission('marketing.promo'), adminController.promoDelete)
+router.get('/promo/stats', requirePermission('marketing.promo'), adminController.promoStats)
 router.get('/banners', requirePermission('marketing.promo'), adminController.bannerList)
 router.post('/banners', requirePermission('marketing.promo'), adminController.bannerCreate)
+router.get('/promotions-settings', requirePermission('marketing.promo'), adminController.promotionsSettingsGet)
+router.put('/promotions-settings', requirePermission('marketing.promo'), adminController.promotionsSettingsPut)
 router.get('/feed-settings', requirePermission('feed.edit'), adminController.feedSettingsGet)
 router.put('/feed-settings', requirePermission('feed.edit'), adminController.feedSettingsPut)
 router.get('/moderation', requirePermission('moderation.view'), adminController.moderationReports)
@@ -61,5 +66,9 @@ router.get('/creator-studio', requirePermission('creators.view'), adminControlle
 router.get('/creator-applications', requirePermission('creators.view'), getCreatorApplications)
 router.post('/creator-applications/:id/approve', requirePermission('creators.approve'), approveApplication)
 router.post('/creator-applications/:id/deny', requirePermission('creators.approve'), denyApplication)
+
+// Unified PPM payout config (admin-set base_rate per creator)
+router.get('/ppm/:creatorId', requirePermission('creators.view'), adminController.getCreatorPPM)
+router.put('/ppm/:creatorId', requirePermission('creators.approve'), adminController.setCreatorPPM)
 
 export default router

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getEvent, getToken, purchaseEventTicket, getMyTickets } from '../lib/auth'
 import VideoPlayer from '../components/features/VideoPlayer'
+import { formatCurrency } from '../lib/currency'
 
 export default function EventDetail() {
   const { id } = useParams()
@@ -107,7 +108,7 @@ export default function EventDetail() {
               <div className="flex items-center justify-between mb-4">
                 <span className="font-label-lg text-on-surface">Price</span>
                 <span className="text-headline-md font-bold text-primary-container">
-                  {event.ticket_price > 0 ? `₦${parseFloat(event.ticket_price).toLocaleString()}` : 'Free'}
+                  {event.ticket_price > 0 ? formatCurrency(parseFloat(event.ticket_price)) : 'Free'}
                 </span>
               </div>
               {event.total_tickets > 0 && (

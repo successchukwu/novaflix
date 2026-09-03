@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getCourses, getToken, enrollCourse, verifyCoursePayment, getMyEnrollments } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function Learn() {
   const [courses, setCourses] = useState<any[]>([])
@@ -110,7 +111,7 @@ export default function Learn() {
                   </div>
                   <span className="absolute top-3 left-3 text-label-xs bg-surface/80 text-on-surface px-2 py-1 rounded-md backdrop-blur-sm">{course.category}</span>
                   {parseFloat(course.price) > 0 && (
-                    <span className="absolute top-3 right-3 bg-primary-container text-on-primary-container text-label-xs px-2 py-1 rounded-md font-bold">₦{parseFloat(course.price).toLocaleString()}</span>
+                    <span className="absolute top-3 right-3 bg-primary-container text-on-primary-container text-label-xs px-2 py-1 rounded-md font-bold">{formatCurrency(parseFloat(course.price))}</span>
                   )}
                 </div>
                 <div className="p-4">

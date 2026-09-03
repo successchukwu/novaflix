@@ -47,7 +47,8 @@ export default function HooksCard({
 }: HooksCardProps) {
   const navigate = useNavigate()
   const isShort = item.type === 'short'
-  const isTrailer = item.type !== 'short' && item.type !== 'ad'
+  const isLive = item.type === 'live'
+  const isTrailer = item.type !== 'short' && item.type !== 'ad' && item.type !== 'live'
   const ytKey = isTrailer ? extractYouTubeKey(item.videoUrl) : null
   const hasPlayableTrailer = isTrailer && !!ytKey
 
@@ -473,7 +474,18 @@ export default function HooksCard({
           </span>
         )}
 
-        {isShort ? (
+        {isLive ? (
+          <>
+            <span className="flex items-center gap-1.5 text-[11px] font-bold text-white bg-red-500/20 backdrop-blur px-2 py-0.5 rounded-lg w-fit mb-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> LIVE
+            </span>
+            <h2 className="font-bold text-sm md:text-base text-white truncate">{item.title}</h2>
+            <p className="text-xs md:text-sm text-white/80 truncate mt-0.5">@{item.creatorName || 'creator'}</p>
+            <span className="flex items-center gap-1 text-xs md:text-sm text-white/70 mt-1">
+              <Icon name="visibility" size="sm" /> {formatCount(item.viewerCount || 0)} watching
+            </span>
+          </>
+        ) : isShort ? (
           <>
             <h2 className="font-bold text-sm md:text-base text-white truncate">
               @{item.creatorName || item.title.replace(/\s+/g, '')}

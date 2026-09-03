@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { API_BASE } from '../../lib/config'
 import Icon from '../../components/ui/Icon'
 import LoginBackdrop from '../../components/features/LoginBackdrop'
+import SocialLoginButtons from '../../components/social/SocialLoginButtons'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -177,6 +178,10 @@ export default function LoginPage() {
             </svg>
             <span className="font-label-md text-label-md text-on-surface">Continue with Google</span>
           </button>
+
+          <div className="mt-4">
+            <SocialLoginButtons redirect={redirect} exclude={['google']} />
+          </div>
 
           <div className="mt-8 text-center space-y-3">
             <p className="text-body-md text-on-surface-variant">

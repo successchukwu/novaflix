@@ -10,16 +10,8 @@ router.post('/claim/start', claimController.startClaim);
 router.get('/claim/preview/:tmdbPersonId', claimController.getClaimPreview);
 router.get('/claim/status/:claimId', claimController.getClaimStatus);
 
-// Persona webhook (no auth)
-router.post('/claim/persona/webhook', 
-  (req, res, next) => {
-    // Capture raw body for webhook verification
-    let data = '';
-    req.on('data', chunk => { data += chunk; });
-    req.on('end', () => { req.rawBody = data; next(); });
-  },
-  claimController.handlePersonaWebhook
-);
+// Social verification (authenticated user attaches their connected social identity)
+router.post('/claim/verify/social', authMiddleware, claimController.verifyClaimSocial);
 
 // Admin routes — require auth + admin + permission
 router.get('/admin/claims', authMiddleware, adminMiddleware, requirePermission('creators.view'), claimController.adminListClaims);

@@ -99,6 +99,34 @@ export async function getFeed(req, res) {
       allItems = merged
     } catch (e) {}
 
+    // Inject live creator streams at the top of the rotation (time-sensitive)
+    try {
+      const { rows: liveStreams } = await pool.query(
+        `SELECT s.id, s.creator_id, s.title, s.started_at, s.viewer_count,
+                u.name as creator_name, u.avatar as creator_avatar
+         FROM creator_streams s
+         JOIN users u ON u.id = s.creator_id
+         WHERE s.status = 'live'
+         ORDER BY s.started_at ASC LIMIT 5`
+      )
+      const liveItems = liveStreams.map((s) => ({
+        id: `live-${s.id}`,
+        videoUrl: `/creator/stream/${s.id}`,
+        poster: s.creator_avatar,
+        title: s.title,
+        year: '',
+        type: 'live',
+        live: true,
+        promoted: false,
+        streamId: s.id,
+        creatorId: s.creator_id,
+        creatorName: s.creator_name,
+        viewerCount: s.viewer_count,
+        startedAt: s.started_at,
+      }))
+      if (liveItems.length) allItems = [...liveItems, ...allItems]
+    } catch (e) {}
+
     // Fetch promoted content from active hooks campaigns
     const nowTime = Date.now()
     if (!promotedCache || nowTime - promotedCacheTime > CACHE_TTL) {

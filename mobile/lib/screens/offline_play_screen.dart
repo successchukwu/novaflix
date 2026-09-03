@@ -69,11 +69,16 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
       final tmp = await service.decryptToTemp(item, episode: episode);
       _tempFile = tmp;
       await _player.open(Media(tmp.path));
-      if (resumePos > 5 && resumePos < 0.95) {
+      // Wait a tick for duration to populate before seeking
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (resumePos > 0.05 && resumePos < 0.95) {
         final dur = _player.state.duration.inMilliseconds;
-        await _player.seek(Duration(milliseconds: (resumePos * dur).round()));
+        if (dur > 0) {
+          await _player.seek(Duration(milliseconds: (resumePos * dur).round()));
+        }
       }
       _subscribe();
+      _startProgressSaver();
       if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) setState(() {
@@ -133,6 +138,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
       _tempFile = tmp;
       await _player.open(Media(tmp.path));
       _subscribe();
+      _startProgressSaver();
       if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) setState(() {

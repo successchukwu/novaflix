@@ -4,6 +4,8 @@ import { verifyPayment, setToken } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
 import Icon from '../components/ui/Icon'
 import OnboardingTour from '../components/ui/OnboardingTour'
+import { formatCurrency, getCurrencySymbol } from '../lib/currency'
+import { useCountdown } from '../hooks/useCountdown'
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams()
@@ -11,6 +13,7 @@ export default function PaymentSuccess() {
   const { user, refresh } = useAuth()
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [error, setError] = useState('')
+  const [paymentData, setPaymentData] = useState<any>(null)
 
   useEffect(() => {
     const reference = searchParams.get('reference')
@@ -25,6 +28,7 @@ export default function PaymentSuccess() {
     verifyPayment(token, reference, plan).then((res) => {
       if (res.success) {
         if (res.token) setToken(res.token)
+        setPaymentData(res)
         setStatus('success')
         refresh()
       } else {
@@ -33,6 +37,11 @@ export default function PaymentSuccess() {
       }
     })
   }, [searchParams, refresh])
+
+  const planEndsAt = paymentData?.planEndsAt || paymentData?.subscription?.expires_at
+  const { timeLeft, isExpired } = useCountdown(planEndsAt)
+  const hasPromo = paymentData?.promoCode
+  const currencySymbol = getCurrencySymbol()
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -50,6 +59,58 @@ export default function PaymentSuccess() {
             <Icon name="check_circle" className="text-green-500 text-6xl mx-auto mb-6" />
             <h1 className="text-headline-lg mb-2">Payment Successful!</h1>
             <p className="text-on-surface-variant mb-8">Your plan has been upgraded. Welcome to <img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" />!</p>
+
+            {hasPromo && planEndsAt && (
+              <div className="mb-8 p-6 bg-surface-container-high rounded-2xl border border-primary-container/30 text-left">
+                <h2 className="text-headline-sm font-bold text-primary mb-4 flex items-center gap-2">
+                  <Icon name="card_giftcard" className="text-primary" /> Promo Applied
+                </h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-on-surface-variant">Promo Code</span>
+                    <span className="font-mono font-bold text-primary">{paymentData.promoCode}</span>
+                  </div>
+                  {paymentData.originalAmount && paymentData.discount && (
+                    <div className="flex justify-between">
+                      <span className="text-on-surface-variant">Original Price</span>
+                      <span className="line-through text-on-surface-variant/60">{formatCurrency(paymentData.originalAmount)}</span>
+                    </div>
+                  }
+                  {paymentData.discount && (
+                    <div className="flex justify-between text-green-400">
+                      <span className="text-on-surface-variant">Discount</span>
+                      <span className="font-bold">-{formatCurrency(paymentData.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-white/10">
+                    <span className="text-on-surface">You Paid</span>
+                    <span className="text-primary">{formatCurrency(paymentData.discountedAmount || paymentData.amount || 0)}</span>
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Icon name="schedule" className="text-on-surface-variant" size="md" />
+                    <span className="text-on-surface-variant">Plan expires</span>
+                  </div>
+                  <div className="font-mono text-2xl text-primary tabular-nums">
+                    {isExpired ? (
+                      <span className="text-red-400">Expired</span>
+                    ) : (
+                      <>
+                        {timeLeft.days > 0 && <span>{timeLeft.days}d </span>}
+                        {timeLeft.hours > 0 && <span>{timeLeft.hours}h </span>}
+                        {timeLeft.minutes > 0 && <span>{timeLeft.minutes}m </span>}
+                        <span>{timeLeft.seconds}s</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-xs text-on-surface-variant/60 mt-1">
+                    {new Date(planEndsAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               id="tour-start-watching"
               onClick={() => navigate('/')}

@@ -76,9 +76,18 @@ export function getTVSeason(id: string, season: string): Promise<{ success: bool
 }
 
 export function getStreamSource(id: string, type: string, season?: string, episode?: string): Promise<StreamSource> {
-  const params: Record<string, string> = { id, type }
+  const params: Record<string, string> = {}
   if (season) params.season = season
   if (episode) params.episode = episode
+
+  if (type === 'tv') {
+    return fetchJson(`${BASE}/tv/${id}/source`, params)
+  }
+  if (type === 'movie') {
+    return fetchJson(`${BASE}/movie/${id}/source`, params)
+  }
+  params.id = id
+  params.type = type
   return fetchJson(`${BASE}/source`, params)
 }
 

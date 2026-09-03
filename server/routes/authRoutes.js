@@ -29,9 +29,14 @@ router.get('/me', authenticateToken, authController.getMe)
 router.post('/forgot-password', authController.forgotPassword)
 router.post('/reset-password', authController.resetPassword)
 
-// Google OAuth
+// Google OAuth (aliases for backward compatibility)
 router.get('/google', authController.startGoogleAuth)
 router.get('/google/callback', authController.googleCallback)
+
+// Social OAuth (Facebook, Instagram, TikTok, Twitter/X, YouTube, Twitch, Discord + Google)
+router.get('/social/providers', authController.socialProviders)
+router.get('/social/:provider', authController.startSocialAuth)
+router.get('/social/:provider/callback', authController.socialCallback)
 
 // ============ DEPRECATED ROUTES → 308 PERMANENT REDIRECTS ============
 

@@ -10,6 +10,7 @@ import '../services/api_service.dart';
 import '../models/media_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/watchlist_provider.dart';
+import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../core/responsive.dart';
 import '../widgets/features/index.dart';
@@ -140,7 +141,9 @@ class MovieDetailScreen extends ConsumerWidget {
             slivers: [
               SliverAppBar(
                 expandedHeight: heroHeight,
-                pinned: true,
+                pinned: false,
+                floating: false,
+                snap: false,
                 backgroundColor: AppColors.background,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
@@ -193,22 +196,27 @@ class MovieDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       Positioned(
-                        top: 24,
+                        top: 0,
                         left: size == ScreenSize.desktop ? 32 : 16,
-                        child: IconButton(
-                          onPressed: () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go('/home');
-                            }
-                          },
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: Colors.white,
-                          ),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black.withValues(alpha: 0.4),
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: IconButton(
+                              onPressed: () {
+                                if (context.canPop()) {
+                                  context.pop();
+                                } else {
+                                  context.go('/home');
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.black.withValues(alpha: 0.4),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -353,11 +361,63 @@ class MovieDetailScreen extends ConsumerWidget {
                                       );
                                     },
                                   ),
-                                  _heroButton(
-                                    label: 'Download',
-                                    icon: Icons.download,
-                                    filled: false,
-                                    onTap: () => context.go('/downloads'),
+                                  Consumer(
+                                    builder: (_, ref2, __) {
+                                      final dlState = ref2.watch(downloadsProvider);
+                                      final isDownloading = dlState.active.any((a) => a.contentId == item.id);
+                                      return _heroButton(
+                                        label: isDownloading ? 'Downloading...' : 'Download',
+                                        icon: Icons.download,
+                                        filled: false,
+                                        onTap: () async {
+                                          if (auth.status != AuthStatus.authenticated) {
+                                            context.go('/login?redirect=/movie/$movieId');
+                                            return;
+                                          }
+                                          try {
+                                            if (isTV) {
+                                              // For TV, gather episodes from seasons if available
+                                              final eps = (item.seasons != null && item.seasons!.isNotEmpty)
+                                                  ? List.generate(item.seasons!.first.episodeCount ?? 1, (i) => {
+                                                        'season': 1,
+                                                        'episode': i + 1,
+                                                        'name': 'Episode ${i + 1}',
+                                                      })
+                                                  : [
+                                                      {'season': 1, 'episode': 1, 'name': 'Episode 1'}
+                                                    ];
+                                              await ref2.read(downloadsProvider.notifier).startDownload(
+                                                    contentId: item.id,
+                                                    type: 'tv',
+                                                    title: item.title,
+                                                    poster: item.posterUrl,
+                                                    backdrop: item.backdropUrl,
+                                                    episodes: eps,
+                                                  );
+                                            } else {
+                                              await ref2.read(downloadsProvider.notifier).startDownload(
+                                                    contentId: item.id,
+                                                    type: 'movie',
+                                                    title: item.title,
+                                                    poster: item.posterUrl,
+                                                    backdrop: item.backdropUrl,
+                                                  );
+                                            }
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Download started — check Downloads'), duration: Duration(seconds: 2)),
+                                              );
+                                              context.go('/downloads');
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              final msg = e.toString().contains('limit') ? 'Device limit reached — manage devices in Settings' : 'Download failed: $e';
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                                            }
+                                          }
+                                        },
+                                      );
+                                    },
                                   ),
                                   Container(
                                     width: 56,

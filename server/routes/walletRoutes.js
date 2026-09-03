@@ -12,7 +12,6 @@ router.get('/wallet/earnings', authMiddleware, walletController.getEarningsSumma
 // PPM
 router.get('/wallet/ppm/rate', authMiddleware, walletController.getPPMRate);
 router.get('/wallet/ppm/config', authMiddleware, walletController.getPPMConfig);
-router.put('/wallet/ppm/config', authMiddleware, walletController.updatePPMConfig);
 router.post('/wallet/ppm/credit', authMiddleware, walletController.creditPPMWatch);
 
 // Tips & Gifts

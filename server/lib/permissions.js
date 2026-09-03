@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   { key: 'finance.settle', label: 'Settle Creator Payouts', group: 'Business' },
   { key: 'marketing.announce', label: 'Send Announcements', group: 'Marketing' },
   { key: 'marketing.promo', label: 'Manage Promo & Banners', group: 'Marketing' },
+  { key: 'promotions.manage', label: 'Manage Discounts & Promotions', group: 'Marketing' },
   { key: 'feed.edit', label: 'Edit Feed Settings', group: 'System' },
   { key: 'settings.view', label: 'View Settings', group: 'System' },
   { key: 'settings.edit', label: 'Edit Settings', group: 'System' },
@@ -59,7 +60,7 @@ export const DEFAULT_ROLES = [
     name: 'Marketing',
     slug: 'marketing',
     description: 'Sends announcements and manages promo codes and banners.',
-    permissions: ['dashboard.view', 'analytics.view', 'marketing.announce', 'marketing.promo'],
+    permissions: ['dashboard.view', 'analytics.view', 'marketing.announce', 'marketing.promo', 'promotions.manage'],
   },
   {
     name: 'Support',

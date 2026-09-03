@@ -975,6 +975,81 @@ export async function adminCreatePromo(token: string, payload: Record<string, an
   } catch { return { success: false, error: 'Network error' } }
 }
 
+export async function adminUpdatePromo(token: string, id: string, payload: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promo/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminDeletePromo(token: string, id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promo/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminPromoStats(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promo/stats`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminPromotionsSettings(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promotions-settings`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminSavePromotionsSettings(token: string, key: string, value: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promotions-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key, value }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function validatePromo(token: string, code: string, plan: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/payment/validate-promo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ code, plan }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function initializePayment(token: string, plan: string, gateway?: string, promoCode?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/payment/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ plan, gateway, promoCode }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getPublicSettings(): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/payment/settings`)
+    return res.json()
+  } catch { return { success: false, currency: 'NGN' } }
+}
+
 export async function adminBanners(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/admin/banners`, { headers: { Authorization: `Bearer ${token}` } })
@@ -1519,6 +1594,37 @@ export async function getStreamStatus(token: string): Promise<any> {
     })
     return res.json()
   } catch { return { success: false, live: false, error: 'Network error' } }
+}
+
+export async function startStream(token: string, data: { title?: string; category?: string; tags?: string[] }): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function endStream(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/end`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// Live stream protocol endpoints
+export async function getLiveStreamInfo(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/info`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
 }
 
 // Creator onboarding
@@ -2381,13 +2487,13 @@ export async function processWithdrawal(amountNgn: number, gateway: string): Pro
 }
 
 // ============ CLAIM FLOW ============
-export async function startClaim(tmdbPersonId: number, displayName?: string): Promise<any> {
+export async function startClaim(tmdbPersonId: number, displayName?: string, provider?: string): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/creator/claim/start`, {
+    const res = await fetch(`${BASE}/claim/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ tmdbPersonId, displayName })
+      body: JSON.stringify({ tmdbPersonId, displayName, provider })
     })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
@@ -2396,7 +2502,7 @@ export async function startClaim(tmdbPersonId: number, displayName?: string): Pr
 export async function getClaimPreview(tmdbPersonId: string): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/creator/claim/preview/${tmdbPersonId}`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetch(`${BASE}/claim/preview/${tmdbPersonId}`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
 }
@@ -2404,9 +2510,33 @@ export async function getClaimPreview(tmdbPersonId: string): Promise<any> {
 export async function getClaimStatus(claimId: string): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/creator/claim/status/${claimId}`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetch(`${BASE}/claim/status/${claimId}`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getSocialProviders(): Promise<any[]> {
+  try {
+    const res = await fetch(`${BASE}/auth/social/providers`)
+    const data = await res.json()
+    return data?.providers || []
+  } catch { return [] }
+}
+
+export async function verifyClaimSocial(claimId: string, provider: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/claim/verify/social`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ claimId, provider })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export function socialOAuthUrl(provider: string): string {
+  return `${BASE}/auth/social/${provider}`
 }
 
 // ============ BENEFICIARY ============
