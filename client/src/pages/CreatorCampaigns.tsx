@@ -5,6 +5,7 @@ import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Skeleton from '../components/ui/Skeleton'
+import { formatCurrency } from '../lib/currency'
 
 interface Campaign {
   id: string
@@ -185,7 +186,7 @@ export default function CreatorCampaigns() {
                           <span className={`px-2 py-0.5 rounded ${isPending ? 'bg-yellow-500/20 text-yellow-400' : isRejected ? 'bg-red-500/20 text-red-400' : isSuspended ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>{status}</span>
                           <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300">{channelBadge}</span>
                           <span>{c.current_impressions}/{c.max_impressions || '∞'} impressions</span>
-                          {c.budget > 0 && <span>₦{c.spent}/{c.budget}</span>}
+                          {c.budget > 0 && <span>{formatCurrency(c.spent)}/{formatCurrency(c.budget)}</span>}
                           {(c as any).paid === false && <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">Awaiting payment</span>}
                         </div>
                       </div>

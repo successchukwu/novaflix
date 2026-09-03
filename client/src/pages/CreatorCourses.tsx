@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken, getMyCourses, createCourse, updateCourse } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function CreatorCourses() {
   const [courses, setCourses] = useState<any[]>([])
@@ -70,7 +71,7 @@ export default function CreatorCourses() {
             <h2 className="font-label-lg mb-4 text-on-surface">{editId ? 'Edit Course' : 'New Course'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Course title" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
-              <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Price (₦) — 0 for free" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
+              <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Price — 0 for free" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Image URL" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <select value={category} onChange={e => setCategory(e.target.value)} className="bg-surface px-4 py-3 rounded-xl text-on-surface border border-outline/20 focus:outline-none focus:border-primary-container/50">
                 <option value="general">General</option>
@@ -108,7 +109,7 @@ export default function CreatorCourses() {
                   </div>
                 </div>
                 <p className="text-label-sm text-primary-container font-bold mt-1">
-                  {parseFloat(c.price) > 0 ? `₦${parseFloat(c.price).toLocaleString()}` : 'Free'}
+                  {parseFloat(c.price) > 0 ? formatCurrency(parseFloat(c.price)) : 'Free'}
                 </p>
                 <div className="flex items-center gap-3 text-label-xs text-on-surface-variant mt-2">
                   <span>{c.lessons_count} lessons</span>

@@ -11,11 +11,13 @@ import '../models/media_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/watchlist_provider.dart';
 import '../providers/downloads_provider.dart';
+import '../services/download_service.dart';
 import '../widgets/ui/index.dart';
 import '../core/responsive.dart';
 import '../widgets/features/index.dart';
 
 class CastMember {
+  final int? id;
   final String? name;
   final String? character;
   final String? profilePath;
@@ -23,6 +25,7 @@ class CastMember {
   final String? department;
 
   const CastMember({
+    this.id,
     this.name,
     this.character,
     this.profilePath,
@@ -31,6 +34,7 @@ class CastMember {
   });
 
   factory CastMember.fromJson(Map<String, dynamic> json) => CastMember(
+    id: json['id'] as int?,
     name: json['name'] as String?,
     character: json['character'] as String?,
     profilePath: json['profile_path'] as String?,
@@ -364,9 +368,32 @@ class MovieDetailScreen extends ConsumerWidget {
                                   Consumer(
                                     builder: (_, ref2, __) {
                                       final dlState = ref2.watch(downloadsProvider);
-                                      final isDownloading = dlState.active.any((a) => a.contentId == item.id);
+                                      final activeMatches = dlState.active.where((a) => a.contentId == item.id).toList();
+                                      final active = activeMatches.isEmpty ? null : activeMatches.first;
+                                      final isDownloading = active != null;
+                                      if (isDownloading) {
+                                        final prog = active.fraction;
+                                        return SizedBox(
+                                          width: 56,
+                                          height: 56,
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              SizedBox(width: 56, height: 56, child: CircularProgressIndicator(value: prog > 0 ? prog : null, strokeWidth: 3, color: AppColors.primary, backgroundColor: Colors.white10)),
+                                              IconButton(
+                                                icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                                                onPressed: () {
+                                                  ref2.read(downloadsProvider.notifier).cancelDownloads();
+                                                  ref2.read(downloadServiceProvider).cancelActive();
+                                                },
+                                                style: IconButton.styleFrom(backgroundColor: Colors.black45),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }
                                       return _heroButton(
-                                        label: isDownloading ? 'Downloading...' : 'Download',
+                                        label: 'Download',
                                         icon: Icons.download,
                                         filled: false,
                                         onTap: () async {
@@ -468,6 +495,26 @@ class MovieDetailScreen extends ConsumerWidget {
                                     ),
                                 ],
                               ),
+                              if (item.trailerKey != null && item.trailerKey!.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                GestureDetector(
+                                  onTap: () => _openTrailer(item.trailerKey!),
+                                  child: Container(
+                                    height: 120,
+                                    width: 200,
+                                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: Colors.black45, border: Border.all(color: Colors.white10)),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        CachedNetworkImage(imageUrl: 'https://img.youtube.com/vi/${item.trailerKey}/hqdefault.jpg', fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(color: Colors.black26)),
+                                        Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.center, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)]))),
+                                        const Center(child: Icon(Icons.play_circle_fill, color: Colors.white, size: 48)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -487,7 +534,7 @@ class MovieDetailScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 32),
-                          _infoCard(item, credits.valueOrNull ?? const [], isTV),
+                          _infoCard(context, item, credits.valueOrNull ?? const [], isTV),
                           const SizedBox(height: 24),
                           _engagementSection(context, item),
                           const SizedBox(height: 24),
@@ -583,7 +630,7 @@ class MovieDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _infoCard(MediaItem item, List<CastMember> credits, bool isTV) {
+  Widget _infoCard(BuildContext context, MediaItem item, List<CastMember> credits, bool isTV) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -620,20 +667,29 @@ class MovieDetailScreen extends ConsumerWidget {
                       width: 80,
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 32,
-                            backgroundColor: AppColors.surfaceContainerHigh,
-                            backgroundImage: person.profilePath != null
-                                ? NetworkImage(
-                                    'https://image.tmdb.org/t/p/w185${person.profilePath}',
-                                  )
-                                : null,
-                            child: person.profilePath == null
-                                ? const Icon(
-                                    Icons.person,
-                                    color: AppColors.onSurfaceVariant,
-                                  )
-                                : null,
+                          GestureDetector(
+                            onTap: () {
+                              if (person.id != null) {
+                                context.push('/user/${person.id}');
+                              } else if (person.name != null) {
+                                context.push('/search-results?q=${Uri.encodeComponent(person.name!)}');
+                              }
+                            },
+                            child: CircleAvatar(
+                              radius: 32,
+                              backgroundColor: AppColors.surfaceContainerHigh,
+                              backgroundImage: person.profilePath != null
+                                  ? NetworkImage(
+                                      'https://image.tmdb.org/t/p/w185${person.profilePath}',
+                                    )
+                                  : null,
+                              child: person.profilePath == null
+                                  ? const Icon(
+                                      Icons.person,
+                                      color: AppColors.onSurfaceVariant,
+                                    )
+                                  : null,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(

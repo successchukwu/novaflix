@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken, getMyEvents, createEvent, updateEvent } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function CreatorEventsManager() {
   const [events, setEvents] = useState<any[]>([])
@@ -75,7 +76,7 @@ export default function CreatorEventsManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={eventDate} onChange={e => setEventDate(e.target.value)} type="datetime-local" className="bg-surface px-4 py-3 rounded-xl text-on-surface border border-outline/20 focus:outline-none focus:border-primary-container/50" />
-              <input value={ticketPrice} onChange={e => setTicketPrice(e.target.value)} type="number" placeholder="Ticket price (₦) — 0 for free" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
+              <input value={ticketPrice} onChange={e => setTicketPrice(e.target.value)} type="number" placeholder="Ticket price — 0 for free" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={totalTickets} onChange={e => setTotalTickets(e.target.value)} type="number" placeholder="Total tickets (0 for unlimited)" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={posterUrl} onChange={e => setPosterUrl(e.target.value)} placeholder="Poster URL" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={streamUrl} onChange={e => setStreamUrl(e.target.value)} placeholder="Stream URL (YouTube/Vimeo embed)" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
@@ -100,7 +101,7 @@ export default function CreatorEventsManager() {
                 <p className="text-label-sm text-on-surface-variant mb-2">{new Date(ev.event_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                 <p className="text-body-sm text-on-surface-variant mb-3 line-clamp-2">{ev.description}</p>
                 <div className="flex items-center justify-between">
-                  <span className="font-label-md text-on-surface">{ev.ticket_price > 0 ? `₦${parseFloat(ev.ticket_price).toLocaleString()}` : 'Free'}</span>
+                  <span className="font-label-md text-on-surface">{ev.ticket_price > 0 ? formatCurrency(parseFloat(ev.ticket_price)) : 'Free'}</span>
                   <div className="flex gap-1">
                     {ev.status === 'scheduled' && <button onClick={() => handleStatusChange(ev.id, 'live')} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-500/20 text-green-400" aria-label="Go live"><Icon name="play_arrow" /></button>}
                     {(ev.status === 'scheduled' || ev.status === 'live') && <button onClick={() => handleStatusChange(ev.id, 'cancelled')} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-red-400" aria-label="Cancel"><Icon name="cancel" /></button>}

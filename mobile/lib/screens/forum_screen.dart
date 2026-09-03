@@ -525,11 +525,11 @@ class _TopicCard extends ConsumerWidget {
     final id = topic['id'] is num
         ? (topic['id'] as num).toInt()
         : int.tryParse(topic['id'].toString()) ?? 0;
-    final up = topic['upvotes'] as num? ?? 0;
-    final down = topic['downvotes'] as num? ?? 0;
+    final up = topic['upvotes'] is num ? topic['upvotes'] as num : num.tryParse(topic['upvotes'].toString()) ?? 0;
+    final down = topic['downvotes'] is num ? topic['downvotes'] as num : num.tryParse(topic['downvotes'].toString()) ?? 0;
     final net = up - down;
-    final replyCount = topic['reply_count'] as num? ?? 0;
-    final userVote = topic['myVote'] as num? ?? 0;
+    final replyCount = topic['reply_count'] is num ? topic['reply_count'] as num : num.tryParse(topic['reply_count'].toString()) ?? 0;
+    final userVote = topic['myVote'] is num ? topic['myVote'] as num : num.tryParse(topic['myVote'].toString()) ?? 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

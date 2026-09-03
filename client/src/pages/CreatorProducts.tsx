@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken, getMyProducts, createProduct, updateProduct } from '../lib/auth'
+import { formatCurrency } from '../lib/currency'
 
 export default function CreatorProducts() {
   const [products, setProducts] = useState<any[]>([])
@@ -66,7 +67,7 @@ export default function CreatorProducts() {
             <h2 className="font-label-lg mb-4 text-on-surface">{editId ? 'Edit Product' : 'New Product'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Product title" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
-              <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Price (₦)" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
+              <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Price" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Image URL" className="bg-surface px-4 py-3 rounded-xl text-on-surface placeholder-on-surface-variant/50 border border-outline/20 focus:outline-none focus:border-primary-container/50" />
               <select value={category} onChange={e => setCategory(e.target.value)} className="bg-surface px-4 py-3 rounded-xl text-on-surface border border-outline/20 focus:outline-none focus:border-primary-container/50">
                 <option value="general">General</option>
@@ -99,7 +100,7 @@ export default function CreatorProducts() {
                     <button onClick={() => handleToggle(p)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-outline/10" aria-label="Toggle"><Icon name={p.active ? 'visibility' : 'visibility_off'} className="text-sm text-on-surface-variant" /></button>
                   </div>
                 </div>
-                <p className="text-label-sm text-primary-container font-bold mt-1">₦{parseFloat(p.price).toLocaleString()}</p>
+                <p className="text-label-sm text-primary-container font-bold mt-1">{formatCurrency(parseFloat(p.price))}</p>
                 <p className="text-label-xs text-on-surface-variant">{p.category}</p>
               </div>
             </div>

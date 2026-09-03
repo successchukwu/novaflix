@@ -97,6 +97,7 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
   bool _watchRecorded = false;
   double _duration = 0;
   double _lastPosition = 0;
+  bool _showEpisodeSelector = false;
   @override
   void initState() {
     super.initState();
@@ -343,6 +344,85 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
                 ),
               ),
             ),
+            if (type == 'tv' && widget.movieId != null)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous, color: Colors.white, size: 24),
+                        style: IconButton.styleFrom(backgroundColor: Colors.black45),
+                        onPressed: () {
+                          final ep = int.tryParse(widget.episode ?? '1') ?? 1;
+                          if (ep > 1) {
+                            context.go('/watch?id=${widget.movieId}&type=tv&season=${widget.season ?? 1}&episode=${ep - 1}');
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(_showEpisodeSelector ? Icons.close : Icons.menu, color: Colors.white, size: 24),
+                        style: IconButton.styleFrom(backgroundColor: Colors.black45),
+                        onPressed: () => setState(() => _showEpisodeSelector = !_showEpisodeSelector),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next, color: Colors.white, size: 24),
+                        style: IconButton.styleFrom(backgroundColor: Colors.black45),
+                        onPressed: () {
+                          final ep = int.tryParse(widget.episode ?? '1') ?? 1;
+                          context.go('/watch?id=${widget.movieId}&type=tv&season=${widget.season ?? 1}&episode=${ep + 1}');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_showEpisodeSelector && type == 'tv' && widget.movieId != null)
+              Positioned(
+                right: 12,
+                top: 64,
+                child: SafeArea(
+                  child: Container(
+                    width: 220,
+                    height: 300,
+                    decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+                    child: Consumer(
+                      builder: (ctx, ref2, __) {
+                        final seasonNum = int.tryParse(widget.season ?? '1') ?? 1;
+                        final epsAsync = ref2.watch(_tvSeasonProvider((id: widget.movieId!, season: seasonNum)));
+                        return epsAsync.when(
+                          loading: () => const Center(child: CircularProgressIndicator()),
+                          error: (e, _) => Center(child: Text('Error $e', style: const TextStyle(color: Colors.white54))),
+                          data: (eps) {
+                            if (eps.isEmpty) return const Center(child: Text('No episodes', style: TextStyle(color: Colors.white54)));
+                            return ListView.builder(
+                              itemCount: eps.length,
+                              itemBuilder: (_, i) {
+                                final ep = eps[i] as Map<String, dynamic>;
+                                final epNum = ep['episode'] as int? ?? ep['episode_number'] as int? ?? i + 1;
+                                final isCurrent = epNum.toString() == widget.episode;
+                                return ListTile(
+                                  dense: true,
+                                  selected: isCurrent,
+                                  selectedTileColor: AppColors.primaryContainer.withValues(alpha: 0.2),
+                                  title: Text('E$epNum: ${ep['name'] ?? 'Episode $epNum'}', style: TextStyle(color: isCurrent ? AppColors.primary : Colors.white, fontSize: 13)),
+                                  onTap: () {
+                                    setState(() => _showEpisodeSelector = false);
+                                    context.go('/watch?id=${widget.movieId}&type=tv&season=$seasonNum&episode=$epNum');
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

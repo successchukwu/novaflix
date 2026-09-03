@@ -114,6 +114,7 @@ FutureProvider<List<MediaItem>> _discoverProvider(
   int? minVotes,
   String? withCompanies,
   String? withOriginalLanguage,
+  String? withOriginCountry,
   String? primaryReleaseDateLte,
 }) {
   return FutureProvider<List<MediaItem>>((ref) async {
@@ -124,6 +125,7 @@ FutureProvider<List<MediaItem>> _discoverProvider(
       minVotes: minVotes,
       withCompanies: withCompanies,
       withOriginalLanguage: withOriginalLanguage,
+      withOriginCountry: withOriginCountry,
       primaryReleaseDateLte: primaryReleaseDateLte,
     );
     final data = res.data['data'] as List? ?? res.data as List;
@@ -137,6 +139,17 @@ final _indieProvider = _discoverProvider(
   'indie',
   type: 'movie',
   withCompanies: '1549',
+);
+final _hollywoodProvider = _discoverProvider(
+  'hollywood',
+  type: 'movie',
+  withOriginCountry: 'US',
+);
+final _nollywoodProvider = _discoverProvider(
+  'nollywood',
+  type: 'movie',
+  withOriginCountry: 'NG',
+  withOriginalLanguage: 'en',
 );
 final _animeProvider = _discoverProvider(
   'anime',
@@ -161,6 +174,8 @@ class HomeScreen extends ConsumerWidget {
     final news = ref.watch(_homeNewsProvider);
     final horror = ref.watch(_categoryProvider(27));
     final indie = ref.watch(_indieProvider);
+    final hollywood = ref.watch(_hollywoodProvider);
+    final nollywood = ref.watch(_nollywoodProvider);
     final anime = ref.watch(_animeProvider);
     final classic = ref.watch(_classicProvider);
     final store = ref.watch(storeProvider);
@@ -185,6 +200,8 @@ class HomeScreen extends ConsumerWidget {
           ref.invalidate(_homeNewsProvider);
           ref.invalidate(_categoryProvider(27));
           ref.invalidate(_indieProvider);
+          ref.invalidate(_hollywoodProvider);
+          ref.invalidate(_nollywoodProvider);
           ref.invalidate(_animeProvider);
           ref.invalidate(_classicProvider);
         },
@@ -299,6 +316,24 @@ class HomeScreen extends ConsumerWidget {
                 data: (items) => items.isEmpty
                     ? const SizedBox.shrink()
                     : ContentRow(title: 'Indie Films', items: items.take(20).toList()),
+                loading: () => const SizedBox(height: 220),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: hollywood.when(
+                data: (items) => items.isEmpty
+                    ? const SizedBox.shrink()
+                    : ContentRow(title: 'Hollywood', items: items.take(20).toList(), onSeeAll: () => context.go('/discover?origin=US')),
+                loading: () => const SizedBox(height: 220),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: nollywood.when(
+                data: (items) => items.isEmpty
+                    ? const SizedBox.shrink()
+                    : ContentRow(title: 'Nollywood', items: items.take(20).toList(), onSeeAll: () => context.go('/discover?origin=NG')),
                 loading: () => const SizedBox(height: 220),
                 error: (_, __) => const SizedBox.shrink(),
               ),
