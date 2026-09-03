@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getToken, adminPromoCodes, adminCreatePromo, adminBanners, adminCreateBanner } from '../lib/auth'
+import { getHollywood, getNollywood } from '../lib/api'
+import ContentRow from '../components/features/ContentRow'
 import PageHeader from '../components/admin/PageHeader'
 import StatCard from '../components/admin/StatCard'
 import StatusBadge from '../components/admin/StatusBadge'
@@ -15,6 +17,8 @@ export default function AdminMarketing() {
   const [promoForm, setPromoForm] = useState<any>({ code: '', discount: 0, maxUses: 0, plan: 'premium', expiresAt: '' })
   const [bannerForm, setBannerForm] = useState<any>({ title: '', image_url: '', link: '/', active: true })
   const [msg, setMsg] = useState('')
+  const [hollywood, setHollywood] = useState<any[]>([])
+  const [nollywood, setNollywood] = useState<any[]>([])
 
   const load = () => {
     Promise.all([adminPromoCodes(token), adminBanners(token)]).then(([p, b]) => {
@@ -22,6 +26,8 @@ export default function AdminMarketing() {
       if (b.success) setBanners(b.banners || [])
       setLoading(false)
     })
+    getHollywood().then(r=>{ if(r.success) setHollywood(r.data.slice(0,20))}).catch(()=>{})
+    getNollywood().then(r=>{ if(r.success) setNollywood(r.data.slice(0,20))}).catch(()=>{})
   }
   useEffect(load, [])
 
@@ -111,6 +117,16 @@ export default function AdminMarketing() {
           {banners.length === 0 && <p className="p-5 text-center text-on-surface-variant text-sm">No banners yet.</p>}
         </div>
       </div>
+
+      {(hollywood.length > 0 || nollywood.length > 0) && (
+        <div className="mt-8 space-y-8 bg-surface-container-high border border-white/5 rounded-xl p-5">
+          <h3 className="font-label-md text-label-md text-on-surface flex items-center gap-2">
+            <Icon name="play_circle" className="text-primary-container" /> Hollywood & Nollywood Preview — Hover to Preview (Desktop)
+          </h3>
+          {hollywood.length > 0 && <ContentRow title="Hollywood" items={hollywood} link="/discover?origin=US" />}
+          {nollywood.length > 0 && <ContentRow title="Nollywood" items={nollywood} link="/discover?origin=NG" />}
+        </div>
+      )}
 
       {showPromo && (
         <Modal title="Create promo code" onClose={() => setShowPromo(false)}>

@@ -15,7 +15,7 @@ interface HoverCardProps {
 
 const detailsCache = new Map<string, { details: any; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000
-const HOVER_DELAY = 400
+const HOVER_DELAY = 500
 const CLOSE_GRACE = 200
 
 export default function HoverCard({ item, index, progress, duration, className, watchUrl }: HoverCardProps) {

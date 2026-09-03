@@ -5,6 +5,7 @@ import {
   cancelMembership, getCreatorMembershipStats,
   createTransaction, getTransactionByReference, updateTransactionByReference,
 } from '../db.js'
+import pool from '../config/database.js'
 
 let _paystack = null
 async function getPaystack() {
@@ -117,17 +118,33 @@ export async function verifySubscription(req, res) {
       if (!tx || tx.status !== 'pending') {
         return res.json({ success: false, error: 'Transaction not found or already processed' })
       }
-      const membership = await createMembership({
-        id: uuidv4(),
-        userId: tx.user_id,
-        tierId: tx.metadata?.tierId,
-        creatorId: tx.creator_id,
-        status: 'active',
-        startedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
-      })
-      await updateTransactionByReference(reference, { status: 'success' })
-      res.json({ success: true, membership })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const { rows } = await client.query(`UPDATE transactions SET status='success' WHERE reference=$1 AND status='pending' RETURNING id`, [reference])
+        if (rows.length === 0) { await client.query('ROLLBACK'); return res.json({ success: false, error: 'Transaction already processed' }) }
+        const membership = await createMembership({
+          id: uuidv4(),
+          userId: tx.user_id,
+          tierId: tx.metadata?.tierId,
+          creatorId: tx.creator_id,
+          status: 'active',
+          startedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+        })
+        // Credit creator 80% of membership price
+        const gross = parseFloat(tx.amount) || 0
+        const platformFee = Math.round(gross * 0.20 * 100) / 100
+        const creatorShare = Math.round((gross - platformFee) * 100) / 100
+        if (tx.creator_id && creatorShare > 0) {
+          const { rows: balRows } = await client.query(`UPDATE creator_profiles SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE user_id=$2 RETURNING wallet_balance_ngn`, [creatorShare, tx.creator_id])
+          const bal = balRows[0]?.wallet_balance_ngn || creatorShare
+          await client.query(`INSERT INTO creator_wallet_transactions (creator_id, type, amount_ngn, balance_after_ngn, metadata) VALUES ($1,'membership',$2,$3,$4)`, [tx.creator_id, creatorShare, bal, JSON.stringify({ reference, gross, platformFee, tierId: tx.metadata?.tierId })])
+        }
+        await client.query('COMMIT')
+        res.json({ success: true, membership })
+      } catch (e) { try { await client.query('ROLLBACK') } catch {}; throw e } finally { client.release() }
+      return
     } else {
       res.json({ success: false, error: 'Payment not completed' })
     }

@@ -5,6 +5,7 @@ import {
   createTransaction, getTransactionByReference, updateTransactionByReference,
 } from '../db.js'
 import { uploadFile } from '../lib/r2.js'
+import pool from '../config/database.js'
 
 let _paystack = null
 async function getPaystack() {
@@ -143,10 +144,30 @@ export async function verifyOrder(req, res) {
       if (!order || order.status !== 'pending') {
         return res.json({ success: false, error: 'Order not found or already processed' })
       }
-      await updateOrder(reference, { status: 'paid' })
-      const platformFee = +(parseFloat(order.total) * 0.15).toFixed(2)
-      await updateTransactionByReference(reference, { status: 'success', metadata: { platformFee, orderId: order.id } })
-      res.json({ success: true, order: { ...order, status: 'paid', platformFee } })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const { rows } = await client.query(`UPDATE transactions SET status='success', metadata = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('orderId', $2::text) WHERE reference=$1 AND status='pending' RETURNING id`, [reference, order.id])
+        if (rows.length === 0) { await client.query('ROLLBACK'); return res.json({ success: false, error: 'Transaction already processed' }) }
+        await client.query(`UPDATE orders SET status='paid' WHERE reference=$1`, [reference])
+        const platformFee = +(parseFloat(order.total) * 0.15).toFixed(2)
+        const gross = parseFloat(order.total)
+        // Credit creators per product line (85% share)
+        const { rows: items } = await client.query(`SELECT oi.*, p.creator_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=$1`, [order.id])
+        for (const it of items) {
+          if (!it.creator_id) continue
+          const lineGross = parseFloat(it.price) * parseInt(it.quantity)
+          const lineNet = Math.round(lineGross * 0.85 * 100) / 100
+          const lineFee = Math.round(lineGross * 0.15 * 100) / 100
+          const { rows: balRows } = await client.query(`UPDATE creator_profiles SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE user_id=$2 RETURNING wallet_balance_ngn`, [lineNet, it.creator_id])
+          const bal = balRows[0]?.wallet_balance_ngn || lineNet
+          await client.query(`INSERT INTO creator_wallet_transactions (creator_id, type, amount_ngn, balance_after_ngn, metadata) VALUES ($1,'product',$2,$3,$4)`, [it.creator_id, lineNet, bal, JSON.stringify({ reference, orderId: order.id, productId: it.product_id, gross: lineGross, platformFee: lineFee })])
+        }
+        await client.query(`UPDATE transactions SET metadata = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('platformFee', $2::text) WHERE reference=$1`, [reference, String(platformFee)])
+        await client.query('COMMIT')
+        res.json({ success: true, order: { ...order, status: 'paid', platformFee } })
+      } catch (e) { try { await client.query('ROLLBACK') } catch {}; throw e } finally { client.release() }
+      return
     } else {
       res.json({ success: false, error: 'Payment not completed' })
     }

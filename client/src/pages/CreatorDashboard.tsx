@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph, getCreatorEarnings, getMyGlowGifts, updateCreatorUpload } from '../lib/auth'
+import { getHollywood, getNollywood } from '../lib/api'
+import ContentRow from '../components/features/ContentRow'
 import Skeleton from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
 import { subscribeCreator } from '../lib/creatorLive'
+import PromoteContentModal from '../components/features/PromoteContentModal'
 
 const tabs = ['Overview', 'Content', 'Audience', 'Engagement', 'Payouts', 'Network', 'Analytics']
 
@@ -36,6 +39,8 @@ export default function CreatorDashboard() {
   const [graphData, setGraphData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [livePulse, setLivePulse] = useState<number>(0)
+  const [hollywood, setHollywood] = useState<any[]>([])
+  const [nollywood, setNollywood] = useState<any[]>([])
 
   const [bankCode, setBankCode] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
@@ -49,6 +54,7 @@ export default function CreatorDashboard() {
   const [editGenre, setEditGenre] = useState('')
   const [editPoster, setEditPoster] = useState<File | null>(null)
   const [editSaving, setEditSaving] = useState(false)
+  const [promoteContent, setPromoteContent] = useState<any>(null)
   const toast = useToast()
 
   const openEdit = (u: any) => {
@@ -81,6 +87,8 @@ export default function CreatorDashboard() {
 
   useEffect(() => {
     loadAll()
+    getHollywood().then(r => { if (r.success) setHollywood(r.data.slice(0, 20)) }).catch(()=>{})
+    getNollywood().then(r => { if (r.success) setNollywood(r.data.slice(0, 20)) }).catch(()=>{})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -160,6 +168,16 @@ export default function CreatorDashboard() {
               ))}
             </div>
 
+            {(hollywood.length > 0 || nollywood.length > 0) && (
+              <div className="space-y-8 bg-surface-container-high border border-white/5 rounded-xl p-5">
+                <h3 className="font-label-md text-label-md text-on-surface mb-3 flex items-center gap-2">
+                  <Icon name="play_circle" className="text-primary-container" /> Featured — Hover to Preview (Desktop)
+                </h3>
+                {hollywood.length > 0 && <ContentRow title="Hollywood" items={hollywood} link="/discover?origin=US" />}
+                {nollywood.length > 0 && <ContentRow title="Nollywood" items={nollywood} link="/discover?origin=NG" />}
+              </div>
+            )}
+
             <div className="grid md:grid-cols-2 gap-gutter">
               <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
                 <h3 className="font-label-md text-label-md text-on-surface mb-3 flex items-center gap-2">
@@ -209,6 +227,7 @@ export default function CreatorDashboard() {
                       <p className="text-on-surface-variant/60 text-xs">{u.views || 0} views · {Math.round((u.minutes_watched || 0) / 60)}h watched</p>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-on-surface-variant/60">
+                      <button onClick={()=>setPromoteContent(u)} title="Promote" className="p-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20"><Icon name="campaign" size="sm" /></button>
                       <button onClick={() => openEdit(u)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
                         <Icon name="edit" size="sm" /> Edit
                       </button>
@@ -614,6 +633,7 @@ export default function CreatorDashboard() {
           </div>
         )}
       </Modal>
+      <PromoteContentModal open={!!promoteContent} onClose={()=>setPromoteContent(null)} content={promoteContent} onCreated={()=>{ setPromoteContent(null); toast.success('Promotion submitted — awaiting approval') }} />
     </div>
   )
 }

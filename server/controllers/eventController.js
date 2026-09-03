@@ -4,6 +4,7 @@ import {
   purchaseEventTicket, getUserTickets, getEventTicketCount,
   createTransaction, getTransactionByReference, updateTransactionByReference,
 } from '../db.js'
+import pool from '../config/database.js'
 
 let _paystack = null
 async function getPaystack() {
@@ -145,16 +146,33 @@ export async function verifyTicketPurchase(req, res) {
       if (!tx || tx.status !== 'pending') {
         return res.json({ success: false, error: 'Transaction not found or already processed' })
       }
-      const eventId = tx.metadata?.eventId
-      const ticket = await purchaseEventTicket({
-        id: uuidv4(),
-        eventId,
-        userId: tx.user_id,
-        transactionId: tx.id,
-        status: 'active',
-      })
-      await updateTransactionByReference(reference, { status: 'success' })
-      res.json({ success: true, ticket })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const { rows } = await client.query(`UPDATE transactions SET status='success' WHERE reference=$1 AND status='pending' RETURNING id`, [reference])
+        if (rows.length === 0) { await client.query('ROLLBACK'); return res.json({ success: false, error: 'Transaction already processed' }) }
+        const eventId = tx.metadata?.eventId
+        const { rows: evRows } = await client.query(`SELECT creator_id, ticket_price FROM live_events WHERE id=$1`, [eventId])
+        const creatorId = evRows[0]?.creator_id || tx.creator_id
+        const ticket = await purchaseEventTicket({
+          id: uuidv4(),
+          eventId,
+          userId: tx.user_id,
+          transactionId: tx.id,
+          status: 'active',
+        })
+        const gross = parseFloat(tx.amount) || parseFloat(evRows[0]?.ticket_price) || 0
+        const platformFee = Math.round(gross * 0.20 * 100) / 100
+        const creatorShare = Math.round((gross - platformFee) * 100) / 100
+        if (creatorId && creatorShare > 0) {
+          const { rows: balRows } = await client.query(`UPDATE creator_profiles SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE user_id=$2 RETURNING wallet_balance_ngn`, [creatorShare, creatorId])
+          const bal = balRows[0]?.wallet_balance_ngn || creatorShare
+          await client.query(`INSERT INTO creator_wallet_transactions (creator_id, type, amount_ngn, balance_after_ngn, metadata) VALUES ($1,'event_ticket',$2,$3,$4)`, [creatorId, creatorShare, bal, JSON.stringify({ reference, eventId, gross, platformFee })])
+        }
+        await client.query('COMMIT')
+        res.json({ success: true, ticket })
+      } catch (e) { try { await client.query('ROLLBACK') } catch {}; throw e } finally { client.release() }
+      return
     } else {
       res.json({ success: false, error: 'Payment not completed' })
     }

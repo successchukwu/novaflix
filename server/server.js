@@ -112,7 +112,7 @@ app.use(cors({
   origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
   credentials: true,
 }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '50mb', verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8') } }));
 
 // ---- Request + error logging (console only) ----
 app.use((req, res, next) => {
@@ -172,6 +172,14 @@ app.use('/api', apiRoutes);
 app.use('/api', claimRoutes);
 app.use('/api', beneficiaryRoutes);
 app.use('/api', walletRoutes);
+
+// Webhook aliases for backward compat (docs & gateway dashboards may use these)
+app.post('/webhooks/paystack', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
+app.post('/webhooks/flutterwave', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
+app.post('/webhooks/stripe', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
+app.post('/api/webhooks/paystack', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
+app.post('/api/webhooks/flutterwave', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
+app.post('/api/webhooks/stripe', (req, res) => import('./controllers/paymentController.js').then(m => m.webhook(req, res)))
 
 // Render health check (also used by monitoring).
 app.get('/api/health', (req, res) => {

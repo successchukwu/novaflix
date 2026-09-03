@@ -43,6 +43,7 @@ export async function createBeneficiary(req, res) {
         `UPDATE creator_profiles SET 
          paystack_recipient_code = $1, 
          paystack_verified_name = $2,
+         paystack_bank_code = $3, paystack_account_number = $4, paystack_account_name = $5,
          bank_code = $3, account_number = $4, account_name = $5
          WHERE user_id = $6`,
         [recipient.data.recipient_code, verifiedName, bankCode, accountNumber, accountName, creatorId]
@@ -82,6 +83,7 @@ export async function createBeneficiary(req, res) {
         `UPDATE creator_profiles SET 
          flutterwave_beneficiary_id = $1, 
          flutterwave_verified_name = $2,
+         flutterwave_bank_code = $3, flutterwave_account_number = $4, flutterwave_account_name = $5,
          bank_code = $3, account_number = $4, account_name = $5
          WHERE user_id = $6`,
         [beneficiary.data.id, verifiedName, bankCode, accountNumber, accountName, creatorId]
@@ -106,11 +108,19 @@ export async function getBeneficiaries(req, res) {
     const { rows } = await pool.query(
       `SELECT paystack_recipient_code, paystack_verified_name, 
               flutterwave_beneficiary_id, flutterwave_verified_name,
-              bank_code, account_number, account_name
+              bank_code, account_number, account_name,
+              paystack_bank_code, paystack_account_number, paystack_account_name,
+              flutterwave_bank_code, flutterwave_account_number, flutterwave_account_name
        FROM creator_profiles WHERE user_id = $1`,
       [creatorId]
     );
-    res.json({ success: true, beneficiaries: rows[0] || {} });
+    const data = rows[0] || {}
+    // Mask account numbers for privacy
+    const mask = (num) => num ? `${String(num).slice(0,3)}******${String(num).slice(-3)}` : num
+    if (data.account_number) data.account_number_masked = mask(data.account_number)
+    if (data.paystack_account_number) data.paystack_account_number_masked = mask(data.paystack_account_number)
+    if (data.flutterwave_account_number) data.flutterwave_account_number_masked = mask(data.flutterwave_account_number)
+    res.json({ success: true, beneficiaries: data });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

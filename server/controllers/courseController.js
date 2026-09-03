@@ -4,6 +4,7 @@ import {
   createEnrollment, getUserEnrollments, getEnrollment,
   createTransaction, getTransactionByReference, updateTransactionByReference,
 } from '../db.js'
+import pool from '../config/database.js'
 
 let _paystack = null
 async function getPaystack() {
@@ -121,12 +122,32 @@ export async function verifyEnrollment(req, res) {
       if (!tx || tx.status !== 'pending') {
         return res.json({ success: false, error: 'Transaction not found or already processed' })
       }
-      const enrollment = await createEnrollment({
-        id: uuidv4(), userId: tx.user_id, courseId: tx.metadata?.courseId,
-        transactionId: tx.id, progress: 0, completed: false,
-      })
-      await updateTransactionByReference(reference, { status: 'success' })
-      res.json({ success: true, enrollment })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const { rows } = await client.query(`UPDATE transactions SET status='success' WHERE reference=$1 AND status='pending' RETURNING id`, [reference])
+        if (rows.length === 0) { await client.query('ROLLBACK'); return res.json({ success: false, error: 'Transaction already processed' }) }
+        const courseId = tx.metadata?.courseId
+        // Get course creator
+        const { rows: courseRows } = await client.query(`SELECT creator_id, price FROM courses WHERE id=$1`, [courseId])
+        const creatorId = courseRows[0]?.creator_id || tx.creator_id
+        const enrollment = await createEnrollment({
+          id: uuidv4(), userId: tx.user_id, courseId,
+          transactionId: tx.id, progress: 0, completed: false,
+        })
+        // Credit 80% to creator
+        const gross = parseFloat(tx.amount) || parseFloat(courseRows[0]?.price) || 0
+        const platformFee = Math.round(gross * 0.20 * 100) / 100
+        const creatorShare = Math.round((gross - platformFee) * 100) / 100
+        if (creatorId && creatorShare > 0) {
+          const { rows: balRows } = await client.query(`UPDATE creator_profiles SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE user_id=$2 RETURNING wallet_balance_ngn`, [creatorShare, creatorId])
+          const bal = balRows[0]?.wallet_balance_ngn || creatorShare
+          await client.query(`INSERT INTO creator_wallet_transactions (creator_id, type, amount_ngn, balance_after_ngn, metadata) VALUES ($1,'course',$2,$3,$4)`, [creatorId, creatorShare, bal, JSON.stringify({ reference, courseId, gross, platformFee })])
+        }
+        await client.query('COMMIT')
+        res.json({ success: true, enrollment })
+      } catch (e) { try { await client.query('ROLLBACK') } catch {}; throw e } finally { client.release() }
+      return
     } else {
       res.json({ success: false, error: 'Payment not completed' })
     }

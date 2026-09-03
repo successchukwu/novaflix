@@ -17,6 +17,9 @@ import Skeleton from '../components/ui/Skeleton'
 import Modal from '../components/ui/Modal'
 import OnboardingTour from '../components/ui/OnboardingTour'
 import type { Variant, Episode, EggPlacement } from '../types'
+import { AdWarningBanner } from '../components/features/AdWarningBanner'
+import { MidRollWarningBanner } from '../components/features/MidRollWarningBanner'
+import { AdUpsellBanner } from '../components/features/AdUpsellBanner'
 
 export default function Watch() {
   const [searchParams] = useSearchParams()
@@ -45,6 +48,9 @@ export default function Watch() {
   const [manifestVariants, setManifestVariants] = useState<Variant[]>([])
   const [showBingePass, setShowBingePass] = useState(false)
   const [bingePassActive, setBingePassActive] = useState(false)
+  const [adPlaying, setAdPlaying] = useState(false)
+  const [adWarning, setAdWarning] = useState<string | null>(null)
+  const [showUpsell, setShowUpsell] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadDone, setDownloadDone] = useState(false)
   const [viewers, setViewers] = useState<any[]>([])
@@ -58,6 +64,7 @@ export default function Watch() {
   const [kickingDevice, setKickingDevice] = useState<string | null>(null)
   const addToContinueWatching = useStore((s) => s.addToContinueWatching)
   const { user, planRank } = useAuth()
+  const isFreeTier = planRank < 2
   const lastRecordRef = useRef(0)
   const durationRef = useRef(0)
   const presenceWsRef = useRef<WebSocket | null>(null)
@@ -378,19 +385,38 @@ export default function Watch() {
             )
           })()
         ) : currentStreamUrl ? (
-          <VideoPlayer
-            streamUrl={currentStreamUrl}
-            subtitles={sourceData?.subtitles || []}
-            title={episodeInfo ? `${title} - ${episodeInfo}` : title}
-            onProgress={handleProgress}
-            onDuration={(d) => { durationRef.current = d }}
-            startTime={resumeSeconds}
-            plan={user?.plan || 'free'}
-            bingePassActive={bingePassActive}
-            eggs={eggPlacements}
-            collectedEggIds={collectedEggIds}
-            onCollectEgg={handleCollectEgg}
-          />
+          <>
+            <AdWarningBanner
+              secondsRemaining={adWarning ? parseInt(adWarning, 10) : 0}
+              onWarningEnd={() => setAdWarning(null)}
+            />
+            <MidRollWarningBanner
+              secondsRemaining={adWarning ? parseInt(adWarning, 10) : 0}
+              onWarningEnd={() => setAdWarning(null)}
+            />
+            <AdUpsellBanner
+              visible={showUpsell && isFreeTier}
+              onDismiss={() => setShowUpsell(false)}
+              onUpgrade={() => navigate('/pricing')}
+            />
+            <VideoPlayer
+              streamUrl={currentStreamUrl}
+              subtitles={sourceData?.subtitles || []}
+              title={episodeInfo ? `${title} - ${episodeInfo}` : title}
+              onProgress={handleProgress}
+              onDuration={(d) => { durationRef.current = d }}
+              startTime={resumeSeconds}
+              plan={user?.plan || 'free'}
+              bingePassActive={bingePassActive}
+              eggs={eggPlacements}
+              collectedEggIds={collectedEggIds}
+              onCollectEgg={handleCollectEgg}
+              contentId={id}
+              adTagUrl={sourceData?.vmapUrl || ''}
+              onAdBreakStart={() => setAdPlaying(true)}
+              onAdBreakEnd={() => setAdPlaying(false)}
+            />
+          </>
         ) : null}
 
         <BingePassModal

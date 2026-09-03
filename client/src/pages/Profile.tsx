@@ -22,7 +22,8 @@ export default function Profile() {
   const [activeList, setActiveList] = useState<'followers' | 'following' | null>(null)
   const [listUsers, setListUsers] = useState<any[]>([])
   const [listLoading, setListLoading] = useState(false)
-  const [serverContinueWatching, setServerContinueWatching] = useState<any[]>([])
+  const [serverContinueWatching, setServerContinueWatching] = useState<any[] | null>(null)
+  const [cwLoading, setCwLoading] = useState(true)
   const [serverWatchlist, setServerWatchlist] = useState<any[]>([])
   const [equippedCosmetics, setEquippedCosmetics] = useState<{ avatar_frame?: any; badge?: any; title?: any }>({})
 
@@ -37,12 +38,23 @@ export default function Profile() {
   }, [])
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setServerContinueWatching([])
+      setCwLoading(false)
+      return
+    }
+    setCwLoading(true)
     const token = localStorage.getItem('novaflix-token') || ''
     getContinueWatching(token).then((res) => {
       if (res.success && Array.isArray(res.history)) {
         setServerContinueWatching(res.history)
+      } else {
+        setServerContinueWatching([])
       }
+    }).catch(() => {
+      setServerContinueWatching([])
+    }).finally(() => {
+      setCwLoading(false)
     })
     getWatchlist(token).then((res) => {
       if (res.success && Array.isArray(res.watchlist)) {
@@ -92,7 +104,9 @@ export default function Profile() {
   const watchlistItems = serverWatchlist
   const movieCount = watchlistItems.filter((w: any) => w.type === 'movie').length
   const tvCount = watchlistItems.filter((w: any) => w.type === 'tv').length
-  const cwItems = serverContinueWatching.map((h) => ({
+
+  // Map server data to UI shape
+  const serverMapped = (serverContinueWatching ?? []).map((h) => ({
     id: Number(h.content_id),
     title: h.title || '',
     poster: h.poster,
@@ -102,6 +116,12 @@ export default function Profile() {
     progress: Number(h.position_seconds || 0),
     duration: Number(h.duration_seconds || 0),
   }))
+
+  // Hydration-aware: local fallback first paint, then server truth
+  const cwItems = serverContinueWatching === null
+    ? continueWatching // first paint: local fallback to prevent layout shift
+    : serverMapped // after hydration: server is truth; empty array hides section
+
   const totalMinutes = cwItems.reduce((acc, c) => acc + Math.round((c.progress || 0) / 60), 0)
   const avgProgress = cwItems.length > 0
     ? Math.round(cwItems.reduce((acc, c) => acc + ((c.progress || 0) / (c.duration || 1)) * 100, 0) / cwItems.length)
@@ -246,7 +266,25 @@ export default function Profile() {
           </button>
         </div>
 
-        {cwItems.length > 0 && (
+        {cwLoading && cwItems.length === 0 ? (
+          <div className="h-[auto] min-h-[120px] animate-pulse" aria-hidden="true">
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 sm:gap-4 bg-surface-container-high/50 border border-white/5 rounded-xl p-3 sm:p-4">
+                  <div className="w-12 h-16 rounded-lg bg-surface-container overflow-hidden shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="h-4 bg-surface-container rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-surface-container rounded w-1/2 mb-2" />
+                    <div className="w-full h-1 bg-surface-container rounded-full mt-2">
+                      <div className="h-full bg-white/10 rounded-full w-1/3" />
+                    </div>
+                  </div>
+                  <div className="shrink-0 w-20 h-8" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : !cwLoading && cwItems.length > 0 ? (
           <div className="mb-10">
             <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4">Continue Watching</h2>
             <div className="space-y-2">
@@ -300,7 +338,7 @@ export default function Profile() {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
         {gamification && (
           <div className="bg-surface-container-high border border-white/5 rounded-xl p-5 mb-6">

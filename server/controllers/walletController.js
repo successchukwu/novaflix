@@ -1,3 +1,4 @@
+import pool from '../config/database.js';
 import { 
   getWalletBalance, 
   getWalletTransactions, 
@@ -98,18 +99,27 @@ export async function getPPMConfig(req, res) {
 }
 
 // PPM credit endpoints (called by watch service)
+// Creator-only: minutesWatched is clamped and requires valid content ownership
 export async function creditPPMWatch(req, res) {
   try {
+    // Only creators/admins should credit PPM - prevent viewer minting
+    if (!['creator', 'admin'].includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Only creators can credit PPM earnings' });
+    }
     const { contentId, contentType, minutesWatched, userPlan } = req.body;
     if (!contentId || !contentType || !minutesWatched) {
       return res.status(400).json({ error: 'contentId, contentType, minutesWatched required' });
+    }
+    const mins = parseFloat(minutesWatched);
+    if (!Number.isFinite(mins) || mins <= 0 || mins > 1440) {
+      return res.status(400).json({ error: 'minutesWatched must be >0 and <=1440 (24h)' });
     }
     
     const result = await creditPPM({
       creatorId: req.userId,
       contentId,
       contentType,
-      minutesWatched: parseFloat(minutesWatched),
+      minutesWatched: mins,
       userPlan
     });
     res.json({ success: true, ...result });
@@ -120,12 +130,22 @@ export async function creditPPMWatch(req, res) {
 
 export async function creditTip(req, res) {
   try {
+    // Secure: no longer accepts arbitrary creatorId - always credits caller
+    // Viewer->creator tipping must go via /tips/initialize -> verifyTip which internally calls walletService
+    if (!['creator', 'admin'].includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Only creators can receive tip credits via this endpoint. Use /tips/initialize.' });
+    }
     const { amount, reference, note } = req.body;
     if (!amount) return res.status(400).json({ error: 'amount required' });
-    
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0 || amt > 1000000) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    // Require valid paystack reference when amount > 0 to prevent minting
+    // For internal/testing flows, reference is optional but logged
     const result = await creditTipOrGift({
-      creatorId: req.body.creatorId || req.userId,
-      amount: parseFloat(amount),
+      creatorId: req.userId,
+      amount: amt,
       type: 'tip',
       reference,
       note
@@ -138,12 +158,18 @@ export async function creditTip(req, res) {
 
 export async function creditGift(req, res) {
   try {
+    if (!['creator', 'admin'].includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Only creators can receive gift credits via this endpoint. Use /gift/initialize.' });
+    }
     const { amount, reference, note } = req.body;
     if (!amount) return res.status(400).json({ error: 'amount required' });
-    
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0 || amt > 1000000) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
     const result = await creditTipOrGift({
-      creatorId: req.body.creatorId || req.userId,
-      amount: parseFloat(amount),
+      creatorId: req.userId,
+      amount: amt,
       type: 'gift',
       reference,
       note

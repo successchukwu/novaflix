@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { addGlowGift, createTransaction, getTransactionByReference, getGlowGiftsForCreator, getGlowGiftsTotals, findUserById, createNotification } from '../db.js'
 import { notifyUser } from '../services/realtime.js'
+import pool from '../config/database.js'
 import Paystack from 'paystack-api'
 
 const paystack = process.env.PAYSTACK_SECRET_KEY
@@ -67,16 +68,19 @@ export async function verifyGift(req, res) {
           netAmount: net,
           note: tx.metadata?.note || '',
         }
-        await addGlowGift(gift)
-        await createTransaction({
-          userId: tx.user_id,
-          reference,
-          type: 'gift',
-          creatorId: tx.creator_id,
-          amount: gross,
-          status: 'success',
-          metadata: { paystackId: txData.id, fee, netAmount: net, note: gift.note },
-        })
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          const { rows } = await client.query(`UPDATE transactions SET status='success', metadata = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('paystackId', $2::text, 'fee', $3::text, 'netAmount', $4::text) WHERE reference=$1 AND status='pending' RETURNING id`, [reference, String(txData.id), String(fee), String(net)])
+          if (rows.length === 0) { await client.query('ROLLBACK'); return res.json({ success: false, error: 'Transaction already processed' }) }
+          await client.query(`INSERT INTO glow_gifts (id, sender_id, creator_id, amount, fee, net_amount, note) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [gift.id, gift.senderId, gift.creatorId, gift.amount, gift.fee, gift.netAmount, gift.note])
+          if (gift.creatorId) {
+            const { rows: balRows } = await client.query(`UPDATE creator_profiles SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE user_id=$2 RETURNING wallet_balance_ngn`, [net, gift.creatorId])
+            const bal = balRows[0]?.wallet_balance_ngn || net
+            await client.query(`INSERT INTO creator_wallet_transactions (creator_id, type, amount_ngn, balance_after_ngn, metadata) VALUES ($1,'gift',$2,$3,$4)`, [gift.creatorId, net, bal, JSON.stringify({ reference, gross, fee, net, paystackId: txData.id })])
+          }
+          await client.query('COMMIT')
+        } catch (e) { try { await client.query('ROLLBACK') } catch {}; throw e } finally { client.release() }
         if (tx.creator_id && tx.creator_id !== tx.user_id) {
           const [sender] = await Promise.all([findUserById(tx.user_id).catch(() => null)])
           const notification = await createNotification({

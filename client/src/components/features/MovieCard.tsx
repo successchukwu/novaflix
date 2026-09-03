@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { MediaItem } from '../../types'
@@ -6,6 +6,8 @@ import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
 import PremiumBadge from '../ui/PremiumBadge'
 import { useStore } from '../../store/useStore'
+import { useHoverVideo } from '../../hooks/useHoverVideo'
+import { getStreamSource } from '../../lib/api'
 
 interface MovieCardProps {
   item: MediaItem
@@ -19,6 +21,23 @@ interface MovieCardProps {
 export default function MovieCard({ item, index = 0, progress, duration, className, watchUrl }: MovieCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null)
+  const [isHoverPlaying, setIsHoverPlaying] = useState(false)
+  const { onEnter, onLeave } = useHoverVideo(videoRef, { delay: 500 })
+
+  // Fetch MP4 streamUrl for hover preview (desktop only) — fallback to YouTube trailerKey
+  useEffect(() => {
+    let cancelled = false
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      getStreamSource(String(item.id), item.type).then(res => {
+        if (cancelled) return
+        if (res.success && (res.streamUrl || res.directUrl)) setStreamUrl(res.streamUrl || res.directUrl)
+        else setStreamUrl(null)
+      }).catch(()=>{ if(!cancelled) setStreamUrl(null) })
+    }
+    return ()=>{ cancelled = true }
+  }, [item.id, item.type])
 
   const addToWatchlist = useStore((s) => s.addToWatchlist)
   const removeFromWatchlist = useStore((s) => s.removeFromWatchlist)
@@ -45,12 +64,23 @@ export default function MovieCard({ item, index = 0, progress, duration, classNa
   const posterUrl = item.poster || ''
   const detailUrl = `/${item.type === 'tv' ? 'tv' : 'movie'}/${item.id}`
 
+  const handleEnter = () => {
+    onEnter()
+    setTimeout(() => setIsHoverPlaying(true), 520)
+  }
+  const handleLeave = () => {
+    onLeave()
+    setIsHoverPlaying(false)
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
-      className={`group relative snap-start ${
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      className={`group relative snap-start hover-video-container ${isHoverPlaying ? 'playing' : ''} ${
         className ?? 'flex-shrink-0 w-[160px] md:w-[220px]'
       }`}
     >
@@ -60,16 +90,45 @@ export default function MovieCard({ item, index = 0, progress, duration, classNa
             <div className="absolute inset-0 shimmer" />
           )}
           {posterUrl && !imgError ? (
-            <img
-              src={posterUrl}
-              alt={item.title}
-              loading="lazy"
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
-              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
-                imgLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
+            <>
+              <img
+                src={posterUrl}
+                alt={item.title}
+                loading="lazy"
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgError(true)}
+                className={`w-full h-full object-cover transition-all duration-500 ${isHoverPlaying ? 'scale-105 opacity-0' : 'group-hover:scale-105'} ${
+                  imgLoaded ? 'opacity-100' : 'opacity-0'
+                } ${isHoverPlaying ? '!opacity-0' : ''}`}
+              />
+              {/* Desktop hover video — MP4 if available, else YouTube youtube-nocookie */}
+              {streamUrl ? (
+                <video
+                  ref={videoRef}
+                  src={streamUrl}
+                  poster={posterUrl || undefined}
+                  muted
+                  loop
+                  playsInline
+                  preload="none"
+                  aria-hidden="true"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out pointer-events-none ${isHoverPlaying ? 'opacity-100' : 'opacity-0'}`}
+                  onPlay={() => setIsHoverPlaying(true)}
+                  onPause={() => setIsHoverPlaying(false)}
+                />
+              ) : item.trailerKey ? (
+                <div className={`absolute inset-0 w-full h-full overflow-hidden pointer-events-none transition-opacity duration-500 ease-out ${isHoverPlaying ? 'opacity-100' : 'opacity-0'}`}>
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${item.trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${item.trailerKey}&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&iv_load_policy=3`}
+                    title={`Trailer for ${item.title}`}
+                    allow="autoplay; encrypted-media"
+                    frameBorder="0"
+                    className="absolute inset-0 w-full h-full object-cover scale-105"
+                    aria-hidden="true"
+                  />
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-on-surface-variant/60 text-sm p-4 text-center">
               {item.title}

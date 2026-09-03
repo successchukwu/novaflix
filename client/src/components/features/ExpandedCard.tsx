@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toggleLike, checkLike } from '../../lib/auth'
@@ -6,6 +6,8 @@ import { subscribeContent } from '../../lib/live'
 import { useAuth } from '../../lib/AuthContext'
 import Icon from '../ui/Icon'
 import type { MediaDetails } from '../../types'
+import { useHoverVideo } from '../../hooks/useHoverVideo'
+import { getStreamSource } from '../../lib/api'
 
 interface ExpandedCardProps {
   details: MediaDetails
@@ -39,6 +41,10 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
   const [visible, setVisible] = useState(false)
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null)
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+  const { onEnter, onLeave } = useHoverVideo(videoRef, { delay: 500 })
 
   useEffect(() => {
     if (user) {
@@ -62,6 +68,39 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
   }, [])
+
+  // Fetch MP4 stream for hover preview (desktop) — fallback to YouTube trailerKey
+  useEffect(() => {
+    let cancelled = false
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      getStreamSource(String(details.id), details.type).then(res => {
+        if (cancelled) return
+        if (res.success && (res.streamUrl || res.directUrl)) setStreamUrl(res.streamUrl || res.directUrl)
+        else setStreamUrl(null)
+      }).catch(()=>{ if(!cancelled) setStreamUrl(null) })
+    }
+    return ()=>{ cancelled = true }
+  }, [details.id, details.type])
+
+  // Auto-play after mount if desktop + stream/trailer ready
+  useEffect(() => {
+    if (!visible) return
+    if (!window.matchMedia('(min-width: 1024px)').matches) return
+    if (!streamUrl && !details.trailerKey) return
+    const t = setTimeout(() => { onEnter(); setIsVideoPlaying(true) }, 400)
+    return () => clearTimeout(t)
+  }, [visible, streamUrl, details.trailerKey, onEnter])
+
+  const handleEnter = () => {
+    onMouseEnter?.()
+    onEnter()
+    setIsVideoPlaying(true)
+  }
+  const handleLeave = () => {
+    onMouseLeave?.()
+    onLeave()
+    setIsVideoPlaying(false)
+  }
 
   useEffect(() => {
     const close = () => onClose()
@@ -145,33 +184,45 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
         transformOrigin,
         transition: 'opacity 200ms ease, transform 200ms ease',
       }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className="rounded-lg overflow-hidden shadow-2xl pointer-events-auto"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      className="rounded-lg overflow-hidden shadow-2xl pointer-events-auto hover-video-container"
     >
-      <div className="relative bg-black" style={{ paddingBottom: '56.25%' }}>
-        {details.trailerKey ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <img
-              src={`https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg`}
-              alt={details.title}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-            <button
-              onClick={handlePlay}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm pointer-events-auto"
-              aria-label={`Play ${details.title} trailer`}
-            >
-              <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
-            </button>
-          </div>
-        ) : (
-          <img
-            src={details.backdrop || details.poster || ''}
-            alt={details.title}
-            className="absolute inset-0 w-full h-full object-cover"
+      <div className="relative bg-black overflow-hidden" style={{ paddingBottom: '56.25%' }}>
+        {/* Static thumbnail — scales slightly on hover */}
+        <img
+          src={details.trailerKey ? `https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg` : (details.backdrop || details.poster || '')}
+          alt={details.title}
+          className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out ${isVideoPlaying ? 'scale-105' : 'scale-100'}`}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
+        {/* Desktop hover video — muted autoplay after 500ms, hidden on <1024 via hook */}
+        {streamUrl && (
+          <video
+            ref={videoRef}
+            src={streamUrl}
+            poster={details.backdrop || details.poster || undefined}
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-hidden="true"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out pointer-events-none ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`}
+            onPlay={() => setIsVideoPlaying(true)}
+            onPause={() => setIsVideoPlaying(false)}
           />
+        )}
+        {!streamUrl && details.trailerKey && (
+          <div className={`absolute inset-0 w-full h-full overflow-hidden pointer-events-none transition-opacity duration-500 ease-out ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`}>
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${details.trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${details.trailerKey}&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&iv_load_policy=3`}
+              title={`Trailer for ${details.title}`}
+              allow="autoplay; encrypted-media"
+              frameBorder="0"
+              className="absolute inset-0 w-full h-full object-cover scale-105"
+              aria-hidden="true"
+            />
+          </div>
         )}
       </div>
 

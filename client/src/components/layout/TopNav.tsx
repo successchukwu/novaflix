@@ -18,8 +18,8 @@ export default function TopNav() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40 glass-panel flex justify-between items-center px-margin-mobile md:px-margin-desktop h-14"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+      className="fixed top-0 left-0 right-0 z-40 glass-panel flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(4rem + env(safe-area-inset-top, 0px))' }}
     >
       <div className={`flex items-center gap-3 min-w-0 ${searchOpen ? 'hidden md:flex' : ''}`}>
         <button
@@ -30,7 +30,7 @@ export default function TopNav() {
           <Icon name="menu" />
         </button>
         <Link to="/home" className={`flex items-center gap-2 shrink-0 ${!sidebarCollapsed ? 'lg:hidden' : ''} ${mobileDrawerOpen ? 'hidden' : ''}`}>
-          <img src="/leter-mark-logo.png" alt="" className="w-auto h-12 object-contain max-h-full" />
+          <img src="/leter-mark-logo.png" alt="NovaFlix" className="w-auto h-6 md:h-7 lg:h-8 object-contain max-h-full shrink-0" />
         </Link>
         <nav className="hidden lg:flex items-center gap-6 ml-8">
           <Link to="/home" className="font-label-md text-label-md text-primary transition-colors">Home</Link>

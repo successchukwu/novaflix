@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
 import { getToken, getCreatorUploads, updateCreatorUpload, deleteCreatorUpload } from '../lib/auth'
 import { subscribeCreator } from '../lib/creatorLive'
+import PromoteContentModal from '../components/features/PromoteContentModal'
 
 const NAV = [
   { path: '/creator', label: 'Dashboard', icon: 'dashboard' },
@@ -32,6 +33,7 @@ export default function CreatorCatalog() {
   const [editForm, setEditForm] = useState({ title: '', description: '', genre: '' })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [promoteContent, setPromoteContent] = useState<any>(null)
 
   const load = async () => {
     const token = getToken()
@@ -222,6 +224,7 @@ export default function CreatorCatalog() {
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setPromoteContent(u)} title="Promote this video" className="p-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 transition-colors"><Icon name="campaign" size="sm" /></button>
                         <button onClick={() => openEdit(u)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs transition-colors"><Icon name="edit" size="sm" /> Edit</button>
                         <button onClick={() => setDeleting(u.id)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-white/10 text-xs transition-colors"><Icon name="delete" size="sm" /></button>
                       </div>
@@ -267,6 +270,8 @@ export default function CreatorCatalog() {
           <Button className="bg-red-500/20 text-red-300" onClick={handleDelete}>Delete</Button>
         </div>
       </Modal>
+
+      <PromoteContentModal open={!!promoteContent} onClose={()=>setPromoteContent(null)} content={promoteContent} onCreated={()=>{ setPromoteContent(null); toast.success('Promotion submitted — awaiting admin approval') }} />
     </div>
   )
 }

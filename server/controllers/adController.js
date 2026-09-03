@@ -29,16 +29,29 @@ export async function getNextAd(req, res) {
       }
     }
 
-    // Query active ad placements
+    // Exhaustion rule: if creator has a boost for this contentId but exhausted, show no ads (no fallback)
+    if (contentId) {
+      const { rows: hasCreator } = await pool.query(`SELECT 1 FROM ad_placements ap JOIN ad_campaigns ac ON ac.id=ap.campaign_id WHERE ap.content_id=$1 AND ac.channel='creator' LIMIT 1`, [contentId])
+      if (hasCreator.length) {
+        const { rows: eligibleCreator } = await pool.query(
+          `SELECT 1 FROM ad_placements ap JOIN ad_campaigns ac ON ac.id=ap.campaign_id
+           WHERE ap.content_id=$1 AND ac.channel='creator' AND ac.active=true AND ac.status='approved' AND ac.paid=true
+           AND (ac.max_impressions=0 OR ac.current_impressions < ac.max_impressions)
+           AND (ac.start_date IS NULL OR ac.start_date <= NOW()) AND (ac.end_date IS NULL OR ac.end_date >= NOW()) LIMIT 1`, [contentId])
+        if (!eligibleCreator.length) return res.json({ success: true, ads: [] })
+      }
+    }
+
+    // Query active ad placements with 3-channel priority: creator -> internal -> google
     const { rows: placements } = await pool.query(
-      `SELECT ap.*, ac.creative_url, ac.creative_type, ac.advertiser_name
+      `SELECT ap.*, ac.creative_url, ac.creative_type, ac.advertiser_name, ac.channel, ac.status
        FROM ad_placements ap
        JOIN ad_campaigns ac ON ac.id = ap.campaign_id
-       WHERE ac.active = true
+       WHERE ac.active = true AND ac.status='approved' AND ac.paid=true
        AND (ac.start_date IS NULL OR ac.start_date <= NOW())
        AND (ac.end_date IS NULL OR ac.end_date >= NOW())
        AND (ac.max_impressions = 0 OR ac.current_impressions < ac.max_impressions)
-       ORDER BY ap.position_type, ap.cue_time_seconds`
+       ORDER BY CASE ac.channel WHEN 'creator' THEN 1 WHEN 'internal' THEN 2 ELSE 3 END, ap.position_type, ap.cue_time_seconds`
     )
 
     // In dev mock mode, provide sample ads if none exist
@@ -99,6 +112,9 @@ export async function getNextAd(req, res) {
       cue_time_seconds: p.cue_time_seconds || 0,
       duration_seconds: p.duration_seconds,
       skip_after_seconds: p.skip_after_seconds,
+      warning_seconds: p.warning_seconds,
+      is_unskippable: p.is_unskippable,
+      channel: p.channel,
     }))
 
     res.json({ success: true, ads })
@@ -214,4 +230,69 @@ export async function incrementSkip(req, res) {
     console.error('[ads] incrementSkip error:', err.message)
     res.status(500).json({ error: err.message })
   }
+}
+
+export async function getPricing(req, res) {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM ad_pricing ORDER BY position_type`)
+    res.json({ success: true, pricing: rows })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function updatePricing(req, res) {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const { position_type, price_per_mille } = req.body
+    if (!position_type || price_per_mille === undefined) return res.status(400).json({ error: 'position_type and price_per_mille required' })
+    await pool.query(`INSERT INTO ad_pricing (position_type, price_per_mille) VALUES ($1,$2) ON CONFLICT (position_type) DO UPDATE SET price_per_mille=$2, updated_at=NOW()`, [position_type, Number(price_per_mille)])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function listPlacements(req, res) {
+  try {
+    const { contentId } = req.query
+    let q = `SELECT ap.*, ac.advertiser_name, ac.channel, ac.status FROM ad_placements ap JOIN ad_campaigns ac ON ac.id=ap.campaign_id WHERE 1=1`
+    const params = []
+    if (contentId) { params.push(contentId); q += ` AND ap.content_id=$${params.length}` }
+    q += ` ORDER BY ap.cue_time_seconds`
+    const { rows } = await pool.query(q, params)
+    res.json({ success: true, placements: rows })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function createPlacement(req, res) {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const { campaign_id, content_id, position_type, cue_time_seconds, duration_seconds, warning_seconds, is_unskippable } = req.body
+    if (!campaign_id || !position_type) return res.status(400).json({ error: 'campaign_id and position_type required' })
+    const id = uuidv4()
+    await pool.query(`INSERT INTO ad_placements (id, campaign_id, content_id, position_type, cue_time_seconds, duration_seconds, warning_seconds, is_unskippable) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, campaign_id, content_id||null, position_type, Number(cue_time_seconds)||0, Number(duration_seconds)||15, Number(warning_seconds)||10, is_unskippable!==false])
+    res.json({ success: true, id })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function deletePlacement(req, res) {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    await pool.query(`DELETE FROM ad_placements WHERE id=$1`, [req.params.id])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function walletDeduct(req, res) {
+  try {
+    const { campaignId, amount } = req.body
+    const need = Number(amount)
+    if (!need || need < 1) return res.status(400).json({ error: 'Invalid amount' })
+    const { rows: u } = await pool.query(`SELECT wallet_balance_ngn FROM users WHERE id=$1`, [req.userId])
+    const bal = Number(u[0]?.wallet_balance_ngn || 0)
+    if (bal < need) return res.status(402).json({ error: 'Insufficient wallet balance' })
+    await pool.query(`UPDATE users SET wallet_balance_ngn = wallet_balance_ngn - $1 WHERE id=$2`, [need, req.userId])
+    await pool.query(`INSERT INTO creator_wallet_transactions (id, creator_id, amount, type, description) VALUES ($1,$2,$3,'ad_spend',$4)`, [uuidv4(), req.userId, -need, `Ad boost ${campaignId}`])
+    if (campaignId) {
+      await pool.query(`UPDATE ad_campaigns SET paid=true, paid_at=NOW() WHERE id=$1 AND creator_id=$2`, [campaignId, req.userId])
+    }
+    res.json({ success: true, balance: bal - need })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 }

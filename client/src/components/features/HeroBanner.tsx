@@ -10,6 +10,8 @@ import Icon from '../ui/Icon'
 import { useStore } from '../../store/useStore'
 import { useToast } from '../ui/Toast'
 import { checkAchievements } from '../../lib/auth'
+import { useHoverVideo } from '../../hooks/useHoverVideo'
+import { getStreamSource } from '../../lib/api'
 
 interface HeroBannerProps {
   items: MediaDetails[]
@@ -24,7 +26,11 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [trailerActive, setTrailerActive] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024)
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
+  const heroVideoRef = useRef<HTMLVideoElement>(null)
+  const [heroStreamUrl, setHeroStreamUrl] = useState<string | null>(null)
+  const [isHoverPlaying, setIsHoverPlaying] = useState(false)
+  const { onEnter: onHeroEnter, onLeave: onHeroLeave } = useHoverVideo(heroVideoRef, { delay: 500 })
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
@@ -56,6 +62,41 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
     intervalRef.current = setInterval(goNext, autoPlayInterval)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [hasMultiple, isPaused, loading, goNext, autoPlayInterval])
+
+  // Fetch MP4 streamUrl for hover preview (server MP4) — fallback to TMDB trailerKey YouTube
+  useEffect(() => {
+    if (!currentItem || !isDesktop) { setHeroStreamUrl(null); return }
+    // Reset previous video
+    if (heroVideoRef.current) { heroVideoRef.current.pause(); heroVideoRef.current.currentTime = 0; setIsHoverPlaying(false) }
+    setHeroStreamUrl(null)
+    let cancelled = false
+    getStreamSource(String(currentItem.id), currentItem.type).then(res => {
+      if (cancelled) return
+      if (res.success && (res.streamUrl || res.directUrl)) {
+        setHeroStreamUrl(res.streamUrl || res.directUrl)
+      } else {
+        // No MP4 — will fallback to youtube-nocookie trailerKey
+        setHeroStreamUrl(null)
+      }
+    }).catch(()=>{ if(!cancelled) setHeroStreamUrl(null) })
+    return ()=>{ cancelled = true }
+  }, [currentItem?.id, currentItem?.type, isDesktop])
+
+  const handleHeroEnter = useCallback(() => {
+    setIsPaused(true)
+    if (!isDesktop) return
+    setTrailerActive(true)
+    onHeroEnter()
+    // Tailwind playing state via flag
+    setTimeout(()=> setIsHoverPlaying(true), 520)
+  }, [isDesktop, onHeroEnter])
+
+  const handleHeroLeave = useCallback(() => {
+    setIsPaused(false)
+    setTrailerActive(false)
+    setIsHoverPlaying(false)
+    onHeroLeave()
+  }, [onHeroLeave])
 
   if (loading || items.length === 0) {
     return (
@@ -107,9 +148,9 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
 
   return (
     <div
-      className="relative w-full h-[60vh] md:h-[70vh] lg:h-[80vh] overflow-hidden"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      className={`relative w-full h-[60vh] md:h-[70vh] lg:h-[80vh] overflow-hidden hover-video-container ${isHoverPlaying ? 'playing' : ''}`}
+      onMouseEnter={handleHeroEnter}
+      onMouseLeave={handleHeroLeave}
     >
       <AnimatePresence mode="wait">
         <div
@@ -132,39 +173,45 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
               <img
                 src={currentItem.backdrop?.replace('/w1280', '/original')}
                 alt={currentItem.title}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover transition-transform duration-700 ease-out ${isHoverPlaying ? 'scale-105' : 'scale-100'}`}
                 loading="eager"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-primary-container/20 to-surface" />
             )}
-            <div className="absolute inset-0 hero-gradient" />
-            <div
-              className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent"
-              onMouseEnter={() => isDesktop && setTrailerActive(true)}
-              onMouseLeave={() => setTrailerActive(false)}
-            />
-            {trailerActive && currentItem.trailerKey && (
-              <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
-                <div className="relative w-[60%] h-auto max-w-4xl">
-                  <div className="aspect-video rounded-lg overflow-hidden bg-black">
-                    <img
-                      src={`https://img.youtube.com/vi/${currentItem.trailerKey}/maxresdefault.jpg`}
-                      alt={currentItem.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/watch?id=${currentItem.id}&type=${currentItem.type}`) }}
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm pointer-events-auto"
-                      aria-label="Watch trailer"
-                    >
-                      <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
-                    </button>
-                  </div>
-                </div>
+            {/* Hover video — desktop only, muted autoplay after 500ms */}
+            {isDesktop && heroStreamUrl && (
+              <video
+                ref={heroVideoRef}
+                src={heroStreamUrl}
+                poster={currentItem.backdrop || undefined}
+                muted
+                loop
+                playsInline
+                preload="none"
+                aria-hidden="true"
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out pointer-events-none ${isHoverPlaying ? 'opacity-100' : 'opacity-0'}`}
+                onPlay={() => setIsHoverPlaying(true)}
+                onPause={() => setIsHoverPlaying(false)}
+              />
+            )}
+            {/* Fallback YouTube youtube-nocookie muted embed when no MP4 available */}
+            {isDesktop && !heroStreamUrl && currentItem.trailerKey && (
+              <div className={`absolute inset-0 w-full h-full overflow-hidden pointer-events-none transition-opacity duration-500 ease-out ${isHoverPlaying ? 'opacity-100' : 'opacity-0'}`}>
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${currentItem.trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${currentItem.trailerKey}&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&iv_load_policy=3`}
+                  title={`Trailer for ${currentItem.title}`}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen={false}
+                  frameBorder="0"
+                  className="absolute inset-0 w-full h-full object-cover scale-105"
+                  aria-hidden="true"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
               </div>
             )}
+            <div className="absolute inset-0 hero-gradient" />
+            <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent pointer-events-none" />
           </motion.div>
         </div>
       </AnimatePresence>

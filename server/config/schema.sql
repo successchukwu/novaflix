@@ -220,6 +220,21 @@ ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS tmdb_person_id INT;
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS known_for_department VARCHAR(100);
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_recipient_code VARCHAR(255);
+-- Gateway-specific bank columns to prevent cross-gateway overwrite (H5 fix)
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_bank_code VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_account_number VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_account_name VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS flutterwave_bank_code VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS flutterwave_account_number VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS flutterwave_account_name VARCHAR(255);
+-- Wallet balance / commission columns
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS wallet_balance_ngn NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_verified_name VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS flutterwave_beneficiary_id VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS flutterwave_verified_name VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS bank_code VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS account_number VARCHAR(20);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS account_name VARCHAR(255);
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS stage_name VARCHAR(255);
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS category VARCHAR(100);
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS portfolio_url TEXT;
@@ -316,7 +331,20 @@ CREATE TABLE IF NOT EXISTS ad_campaigns (
   start_date TIMESTAMP DEFAULT NOW(),
   end_date TIMESTAMP,
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  -- VAST/VMAP support
+  vast_url TEXT,
+  vmap_url TEXT,
+  is_vast BOOLEAN DEFAULT FALSE,
+  click_url TEXT,
+  ad_pod_duration INT DEFAULT 60, -- mid-roll pod duration in seconds
+  channel VARCHAR(20) DEFAULT 'internal' CHECK (channel IN ('google','creator','internal')),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','suspended')),
+  rejection_reason TEXT,
+  paid BOOLEAN DEFAULT FALSE,
+  paid_at TIMESTAMP,
+  gam_tag_url TEXT,
+  is_house BOOLEAN DEFAULT FALSE
 );
 
 ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES users(id) ON DELETE CASCADE;
@@ -324,17 +352,62 @@ ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS promotion_type VARCHAR(20) DEF
 ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS target_media_id VARCHAR(255);
 ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS spent DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS vast_url TEXT;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS vmap_url TEXT;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS is_vast BOOLEAN DEFAULT FALSE;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS click_url TEXT;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS ad_pod_duration INT DEFAULT 60;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS channel VARCHAR(20) DEFAULT 'internal' CHECK (channel IN ('google','creator','internal'));
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','suspended'));
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS paid BOOLEAN DEFAULT FALSE;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS gam_tag_url TEXT;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS is_house BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS ad_placements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id UUID REFERENCES ad_campaigns(id) ON DELETE CASCADE,
   content_id VARCHAR(255),
-  position_type VARCHAR(20) NOT NULL CHECK (position_type IN ('pause', 'mid_roll', 'binge_pass', 'promoted', 'banner')),
+  position_type VARCHAR(30) NOT NULL CHECK (position_type IN ('pre_roll', 'mid_roll', 'post_roll', 'pause', 'binge_pass', 'promoted', 'banner')),
   cue_time_seconds INT DEFAULT 0,
   duration_seconds INT DEFAULT 15,
   skip_after_seconds INT DEFAULT 0,
+  warning_seconds INT DEFAULT 10, -- pre-mid-roll warning
+  is_unskippable BOOLEAN DEFAULT TRUE, -- for free tier pre/mid-roll
+  ad_pod_position INT DEFAULT 0, -- position in ad pod (for mid-roll pods)
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE ad_placements ADD COLUMN IF NOT EXISTS warning_seconds INT DEFAULT 10;
+ALTER TABLE ad_placements ADD COLUMN IF NOT EXISTS is_unskippable BOOLEAN DEFAULT TRUE;
+ALTER TABLE ad_placements ADD COLUMN IF NOT EXISTS ad_pod_position INT DEFAULT 0;
+ALTER TABLE ad_impressions ADD COLUMN IF NOT EXISTS channel VARCHAR(20);
+ALTER TABLE ad_impressions ADD COLUMN IF NOT EXISTS quartile VARCHAR(20);
+
+CREATE TABLE IF NOT EXISTS ad_pricing (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  position_type VARCHAR(30) NOT NULL UNIQUE CHECK (position_type IN ('pre_roll','mid_roll','post_roll','pause','banner')),
+  price_per_mille INT NOT NULL DEFAULT 800,
+  min_impressions INT NOT NULL DEFAULT 500,
+  max_impressions_cap INT NOT NULL DEFAULT 50000,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+INSERT INTO ad_pricing (position_type, price_per_mille) VALUES
+  ('pre_roll', 800), ('mid_roll', 600), ('post_roll', 400), ('pause', 500), ('banner', 300)
+ON CONFLICT (position_type) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS ad_settings (
+  key VARCHAR(100) PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+INSERT INTO ad_settings (key, value) VALUES
+  ('waterfall', '{"order":["creator","internal","google"]}'::jsonb),
+  ('frequency', '{"mid_roll_interval_seconds":1800,"ad_pod_max_duration":60,"max_campaigns_per_creator":5}'::jsonb),
+  ('skippability', '{"pre_roll":true,"mid_roll":true,"post_roll":false,"pause":false}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ad_impressions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

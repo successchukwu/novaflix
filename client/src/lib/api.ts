@@ -353,6 +353,9 @@ export function getDiscover(params: {
   with_keywords?: string
   with_companies?: string
   with_original_language?: string
+  with_origin_country?: string
+  region?: string
+  watch_region?: string
   primary_release_date_gte?: string
   primary_release_date_lte?: string
 }): Promise<{ success: boolean; data: MediaItem[]; total_pages?: number; page?: number; error?: string }> {
@@ -365,9 +368,29 @@ export function getDiscover(params: {
   if (params.with_keywords) queryParams.with_keywords = params.with_keywords
   if (params.with_companies) queryParams.with_companies = params.with_companies
   if (params.with_original_language) queryParams.with_original_language = params.with_original_language
+  if (params.with_origin_country) queryParams.with_origin_country = params.with_origin_country
+  if (params.region) queryParams.region = params.region
+  if (params.watch_region) queryParams.watch_region = params.watch_region
   if (params.primary_release_date_gte) queryParams.primary_release_date_gte = params.primary_release_date_gte
   if (params.primary_release_date_lte) queryParams.primary_release_date_lte = params.primary_release_date_lte
   return fetchJson(`${BASE}/discover`, queryParams)
+}
+
+// Nollywood uploads merged fetch — TMDB + creator uploads tagged nollywood
+export async function getNollywood(): Promise<{ success: boolean; data: MediaItem[]; error?: string }> {
+  const tmdbRes = await getDiscover({ type: 'movie', with_origin_country: 'NG', with_original_language: 'en', sort_by: 'popularity.desc' })
+  let uploads: MediaItem[] = []
+  try {
+    const res = await fetchJson<{ success: boolean; data: MediaItem[] }>(`${BASE}/search/all`, { q: 'nollywood' })
+    if (res.success && res.data) uploads = res.data.filter((m: any) => m.source === 'creator').slice(0, 10)
+  } catch {}
+  const merged = [...(tmdbRes.data || []), ...uploads]
+  return { success: true, data: merged.slice(0, 20) }
+}
+
+export async function getHollywood(): Promise<{ success: boolean; data: MediaItem[]; error?: string }> {
+  const res = await getDiscover({ type: 'movie', with_origin_country: 'US', with_original_language: 'en', sort_by: 'popularity.desc' })
+  return res
 }
 
 export function getHooksFeed(page?: number): Promise<{ success: boolean; data: HookItem[]; nextPage?: number }> {

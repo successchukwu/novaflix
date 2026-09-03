@@ -290,7 +290,7 @@ export function getCategoryMovies(req, res) {
 
 export function getDiscover(req, res) {
   const tmdb = req.app.locals.tmdb
-  const { genre_id, type, sort_by, page, min_votes, with_keywords, with_companies, with_original_language, primary_release_date_gte, primary_release_date_lte } = req.query
+  const { genre_id, type, sort_by, page, min_votes, with_keywords, with_companies, with_original_language, with_origin_country, region, watch_region, primary_release_date_gte, primary_release_date_lte } = req.query
   const mediaType = type === 'tv' ? 'tv' : 'movie'
   const pageNum = Math.min(Math.max(parseInt(page, 10) || 1, 1), 500)
   const params = {
@@ -303,6 +303,9 @@ export function getDiscover(req, res) {
   if (with_keywords) params.with_keywords = with_keywords
   if (with_companies) params.with_companies = with_companies
   if (with_original_language) params.with_original_language = with_original_language
+  if (with_origin_country) params.with_origin_country = with_origin_country
+  if (region) params.region = region
+  if (watch_region) params.watch_region = watch_region
   if (primary_release_date_gte) params['primary_release_date.gte'] = primary_release_date_gte
   if (primary_release_date_lte) params['primary_release_date.lte'] = primary_release_date_lte
 

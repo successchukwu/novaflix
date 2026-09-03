@@ -182,9 +182,21 @@ export default function Pricing() {
 
   useEffect(() => {
     if (user) {
-      getGatewayInfo(localStorage.getItem('novaflix-token') || '').then(setGateways)
+      getGatewayInfo(localStorage.getItem('novaflix-token') || '').then(setGateways).catch(() => setGateways({ paystack: { configured: false, publicKey: '' }, flutterwave: { configured: false, publicKey: '' } }))
     }
   }, [user])
+
+  useEffect(() => {
+    if (gateways) {
+      if (!gateways.paystack.configured && !gateways.flutterwave.configured) {
+        // leave default but will be disabled
+      } else if (!gateways.flutterwave.configured && gateways.paystack.configured) {
+        setModalGateway('paystack')
+      } else if (gateways.flutterwave.configured) {
+        setModalGateway('flutterwave')
+      }
+    }
+  }, [gateways])
 
   const handleSelectPlan = (planId: string) => {
     if (!user) { navigate('/login'); return }
@@ -446,13 +458,21 @@ export default function Pricing() {
             <Button
               onClick={handlePayNow}
               loading={modalLoading}
-              disabled={!!(modalGateway === 'paystack' && gateways && !gateways.paystack.configured)}
+              disabled={!!(gateways && (
+                (modalGateway === 'paystack' && !gateways.paystack.configured) ||
+                (modalGateway === 'flutterwave' && !gateways.flutterwave.configured)
+              ))}
               className="w-full justify-center"
             >
-              {modalGateway === 'paystack' && gateways && !gateways.paystack.configured
+              {gateways && modalGateway === 'paystack' && !gateways.paystack.configured
                 ? 'Paystack unavailable — add keys in .env'
+                : gateways && modalGateway === 'flutterwave' && !gateways.flutterwave.configured
+                ? 'Flutterwave unavailable — add keys in .env'
                 : 'Pay Now'}
             </Button>
+            {gateways && !gateways.paystack.configured && !gateways.flutterwave.configured && (
+              <p className="text-center text-sm text-red-500 mt-2">No payment gateway configured. Contact support.</p>
+            )}
             <p className="text-center text-body-sm text-on-surface-variant mt-4">
               You'll be redirected to the payment portal
             </p>

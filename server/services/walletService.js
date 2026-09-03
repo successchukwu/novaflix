@@ -189,25 +189,28 @@ export async function withdraw({ creatorId, amountNgn, gateway }) {
   }
 
   const gatewayFee = GATEWAY_FEES[gateway] || 0;
-  const totalDeduction = amountNgn + gatewayFee;
+  const totalDeduction = amountNgn;
+  const transferAmount = Math.max(0, amountNgn - gatewayFee);
 
   // Atomic debit + payout initiation
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Check balance + atomic debit
+    // Check balance + atomic debit (deduct requested amount, fee borne by creator via reduced transfer)
     const { rows } = await client.query(
       `UPDATE creator_profiles 
        SET wallet_balance_ngn = wallet_balance_ngn - $1 
        WHERE user_id = $2 AND wallet_balance_ngn >= $1
        RETURNING wallet_balance_ngn, paystack_recipient_code, flutterwave_beneficiary_id, 
-                 paystack_verified_name, flutterwave_verified_name, bank_code, account_number, account_name`,
+                 paystack_verified_name, flutterwave_verified_name, bank_code, account_number, account_name,
+                 paystack_bank_code, paystack_account_number, paystack_account_name,
+                 flutterwave_bank_code, flutterwave_account_number, flutterwave_account_name`,
       [totalDeduction, creatorId]
     );
 
     if (rows.length === 0) {
-      throw new Error('Insufficient balance including gateway fee');
+      throw new Error('Insufficient balance');
     }
 
     const profile = rows[0];
@@ -221,25 +224,29 @@ export async function withdraw({ creatorId, amountNgn, gateway }) {
       throw new Error('Flutterwave beneficiary not configured. Add bank account first.');
     }
 
-    // Initiate payout
+    // Initiate payout (transfer net amount, fee retained by platform)
     let transfer;
     if (gateway === 'paystack') {
       transfer = await paystackService.initiateTransfer({
-        amount: amountNgn,
+        amount: transferAmount,
         recipient: profile.paystack_recipient_code,
         reason: 'NovaFlix creator withdrawal'
       });
     } else {
+      // Prefer gateway-specific columns, fallback to generic
+      const fwBank = profile.flutterwave_bank_code || profile.bank_code
+      const fwAcct = profile.flutterwave_account_number || profile.account_number
+      const fwName = profile.flutterwave_account_name || profile.account_name
       transfer = await flutterwaveService.initiateTransfer({
-        amount: amountNgn,
-        accountBank: profile.bank_code,
-        accountNumber: profile.account_number,
-        beneficiaryName: profile.account_name,
+        amount: transferAmount,
+        accountBank: fwBank,
+        accountNumber: fwAcct,
+        beneficiaryName: fwName,
         reference: `NFX-WD-${Date.now()}-${creatorId.slice(0,8)}`
       });
     }
 
-    // Log withdrawal transaction
+    // Log withdrawal transaction (deducted amount includes fee implicitly via reduced payout)
     await client.query(
       `INSERT INTO creator_wallet_transactions 
        (creator_id, type, amount_ngn, balance_after_ngn, metadata)
@@ -248,9 +255,10 @@ export async function withdraw({ creatorId, amountNgn, gateway }) {
         gateway,
         amountNgn,
         gatewayFee: GATEWAY_FEES[gateway],
+        transferAmount,
         transferRef: transfer.data?.reference || transfer.data?.id,
         verifiedName: gateway === 'paystack' ? profile.paystack_verified_name : profile.flutterwave_verified_name,
-        netToCreator: amountNgn - (GATEWAY_FEES[gateway] || 0)
+        netToCreator: transferAmount
       })]
     );
 
@@ -260,7 +268,8 @@ export async function withdraw({ creatorId, amountNgn, gateway }) {
       newBalance, 
       amountNgn,
       gatewayFee: GATEWAY_FEES[gateway],
-      netToCreator: amountNgn - (GATEWAY_FEES[gateway] || 0),
+      transferAmount,
+      netToCreator: transferAmount,
       transferRef: transfer.data?.reference || transfer.data?.id
     };
   } catch (err) {
@@ -274,11 +283,13 @@ export async function withdraw({ creatorId, amountNgn, gateway }) {
 export async function getWithdrawalPreview({ creatorId, amountNgn, gateway }) {
   const gatewayFee = GATEWAY_FEES[gateway] || 0;
   const balance = await getWalletBalance(creatorId);
-  const totalDeduction = amountNgn + gatewayFee;
+  const transferAmount = Math.max(0, amountNgn - gatewayFee);
+  const totalDeduction = amountNgn;
   return {
     amountNgn,
     gatewayFee,
-    netToCreator: amountNgn - gatewayFee,
+    transferAmount,
+    netToCreator: transferAmount,
     totalDeduction,
     balance,
     canWithdraw: balance >= totalDeduction && amountNgn >= 10000

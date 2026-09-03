@@ -44,7 +44,13 @@ ADD COLUMN IF NOT EXISTS flutterwave_beneficiary_id VARCHAR(255),
 ADD COLUMN IF NOT EXISTS flutterwave_verified_name VARCHAR(255),
 ADD COLUMN IF NOT EXISTS bank_code VARCHAR(20),
 ADD COLUMN IF NOT EXISTS account_number VARCHAR(20),
-ADD COLUMN IF NOT EXISTS account_name VARCHAR(255);
+ADD COLUMN IF NOT EXISTS account_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS paystack_bank_code VARCHAR(20),
+ADD COLUMN IF NOT EXISTS paystack_account_number VARCHAR(20),
+ADD COLUMN IF NOT EXISTS paystack_account_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS flutterwave_bank_code VARCHAR(20),
+ADD COLUMN IF NOT EXISTS flutterwave_account_number VARCHAR(20),
+ADD COLUMN IF NOT EXISTS flutterwave_account_name VARCHAR(255);
 
 -- 3. Wallet transactions (unified ledger)
 CREATE TABLE IF NOT EXISTS creator_wallet_transactions (
