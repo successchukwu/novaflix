@@ -47,6 +47,7 @@ class DownloadsScreen extends ConsumerWidget {
                     _limitBanner(context, ref, dlState.limitError!),
                   if (isOffline)
                     _offlineBanner(context),
+                  _storageBar(context, ref),
                   const SizedBox(height: 8),
 
                   if (active.isNotEmpty) ...[
@@ -105,6 +106,58 @@ class DownloadsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _storageBar(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<int>(
+      future: ref.read(downloadServiceProvider).getTotalDownloadedBytes(),
+      builder: (ctx, snap) {
+        final used = snap.data ?? 0;
+        final total = 300 * 1024 * 1024;
+        final pct = (used / total).clamp(0.0, 1.0);
+        String fmt(int b) {
+          if (b <= 0) return '0 MB';
+          final mb = b / (1024 * 1024);
+          return mb >= 1024 ? '${(mb/1024).toStringAsFixed(1)} GB' : '${mb.toStringAsFixed(1)} MB';
+        }
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Storage', style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+                  Text('${fmt(used)} / 300 MB', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: pct,
+                  minHeight: 6,
+                  backgroundColor: Colors.white12,
+                  color: pct > 0.9 ? AppColors.error : pct > 0.75 ? Colors.orangeAccent : AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '100 MB per file at lowest quality (184p) • 1 movie (~75MB) + 2 episodes (~30MB each) ≈ 130 MB',
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

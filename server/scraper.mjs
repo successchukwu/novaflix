@@ -4,6 +4,7 @@ import xpassProvider from './providers/xpass-provider.js'
 import nextgenProvider from './providers/nextgen-provider.js'
 import vidsrcProvider from './providers/vidsrc-provider.js'
 import vidsrcpmProvider from './providers/vidsrcpm-provider.js'
+import anidbProvider from './providers/anidb-provider.js'
 
 const engine = new ProviderEngine()
 
@@ -11,6 +12,7 @@ engine.register(nextgenProvider)
 engine.register(xpassProvider)
 engine.register(vidsrcProvider)
 engine.register(vidsrcpmProvider)
+engine.register(anidbProvider)
 
 export async function getStreamUrl(tmdbId, type = 'movie', season = null, episode = null) {
   const result = await engine.resolve(tmdbId, type, season, episode)

@@ -5,12 +5,14 @@ import { isBlocked, reportFailure, reportSuccess } from './providerHealth.js'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 const DOMAINS = [
+  // Prioritize domains that actually resolve (tested 2026-09-03):
+  // vidsrc.me works, vidsrc.su works, others are dead (EAI_AGAIN/404)
+  'vidsrc.me',
+  'vidsrc.su',
   'vidsrc.to',
   'vidsrc.fyi',
-  'vidsrc.su',
   'vidsrc.cc',
   'vidsrc.sbs',
-  'vidsrc.me',
   'vidsrc.xyz',
   'vidsrc.dev',
   'vidsrc.rip',
@@ -56,7 +58,10 @@ async function tryDomain(domain, tmdbId, type, season, episode) {
   const res = await axios.get(embedUrl, {
     headers: { 'User-Agent': UA, Referer: `https://${domain}/` },
     timeout: 6000,
+    family: 4,
+    validateStatus: () => true,
   })
+  if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
   const html = res.data
 
   if (html.includes('cf-browser-verification') || html.includes('__cf_chl')) {
@@ -72,6 +77,8 @@ async function tryDomain(domain, tmdbId, type, season, episode) {
       const fr = await axios.get(fullUrl, {
         headers: { 'User-Agent': UA, Referer: embedUrl },
         timeout: 5000,
+        family: 4,
+        validateStatus: () => true,
       })
       const fhtml = fr.data
 

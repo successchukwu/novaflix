@@ -18,6 +18,7 @@ export async function verifyHlsUrl(url, referer) {
     const res = await axios.get(url, {
       headers: { 'User-Agent': UA, Referer: referer || 'https://nextgencloudfabric.com/', Range: 'bytes=0-8192' },
       timeout: 5000,
+      family: 4,
       validateStatus: () => true,
       responseType: 'arraybuffer',
     })
@@ -54,7 +55,7 @@ async function checkFirstSegment(body, playlistUrl, referer) {
     const firstSeg = lines[0]
     const segUrl = firstSeg.startsWith('http') ? firstSeg : new URL(firstSeg, playlistUrl).href
     const headRes = await axios({
-      url: segUrl, method: 'HEAD', timeout: 5000,
+      url: segUrl, method: 'HEAD', timeout: 5000, family: 4,
       validateStatus: () => true,
       headers: { 'User-Agent': UA, Referer: referer || 'https://nextgencloudfabric.com/' },
     })
@@ -68,7 +69,7 @@ async function checkFirstSegment(body, playlistUrl, referer) {
 
 export async function quickHead(url, referer) {
   try {
-    const res = await axios({ url, method: 'HEAD', timeout: 5000, validateStatus: () => true,
+    const res = await axios({ url, method: 'HEAD', timeout: 5000, family: 4, validateStatus: () => true,
       headers: { 'User-Agent': UA, Referer: referer || '' },
     })
     return res.status === 200 || res.status === 206

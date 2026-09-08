@@ -66,18 +66,21 @@ async function scrape(pageUrl) {
     const res = await axios.get(pageUrl, {
       headers: { 'User-Agent': UA, Referer: 'https://www.2embed.skin/' },
       timeout: 8000,
+      family: 4,
     })
     html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
     const setCookies = res.headers['set-cookie']
     if (Array.isArray(setCookies)) {
       cookie = setCookies.map((c) => c.split(';')[0]).join('; ')
     }
-  } catch {
+  } catch (e) {
+    console.log(`[xpass] page fetch failed: ${e.code||e.message?.slice(0,60)}`)
     return { streamUrl: null, subtitles: [] }
   }
 
   const suburl = extractSuburl(html)
   const paths = extractPlaylistPaths(html)
+  const dataUrl = extractDataUrl(html)
 
   const sessionHeaders = {
     'User-Agent': UA,
@@ -86,7 +89,14 @@ async function scrape(pageUrl) {
     ...(cookie ? { Cookie: cookie } : {}),
   }
 
-  const sources = await collectSources(paths, sessionHeaders)
+  // New xpass uses encrypted /data/movie|tv endpoint; collect those sources first
+  let encryptedSources = []
+  if (dataUrl) {
+    encryptedSources = await collectEncryptedSources(dataUrl, sessionHeaders)
+    if (encryptedSources.length) console.log(`[xpass] encrypted sources: ${encryptedSources.length}`)
+  }
+
+  const sources = [...encryptedSources, ...(await collectSources(paths, sessionHeaders))]
   if (sources.length === 0) {
     return { streamUrl: null, subtitles: [] }
   }
@@ -122,6 +132,46 @@ async function firstVerified(candidates, headers) {
   return Promise.race([winnerPromise, allDone, deadline])
 }
 
+function extractDataUrl(html) {
+  const m = html.match(/dataUrl\s*=\s*"([^"]+)"|\/data\/(movie|tv)\/[^\s"']+/)
+  if (m) return m[1] || m[0]
+  const m2 = html.match(/dataUrl="([^"]+)"/)
+  return m2 ? m2[1] : null
+}
+
+async function collectEncryptedSources(dataUrl, headers) {
+  const found = new Set()
+  try {
+    const full = dataUrl.startsWith('http') ? dataUrl : `${XPLAY_HOST}${dataUrl}`
+    const res = await axios.get(full, { headers, timeout: 6000, family: 4, validateStatus: () => true, responseType: 'text' })
+    if (res.status !== 200) {
+      console.log(`[xpass] encrypted fetch ${res.status}`)
+      return []
+    }
+    const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
+    // The payload is base64url-encoded; try to decode and extract m3u8/ mp4 URLs even without full decryption
+    // Directly search for any http urls inside decoded payload
+    try {
+      const decoded = Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+      const urls = [...decoded.matchAll(/https?:\/\/[^'"\\\s]+\.(?:m3u8|mp4)[^'"\\\s]*/gi)].map(m => m[0])
+      for (const u of urls) if (!isFakeHost(u)) found.add(u)
+      if (urls.length) console.log(`[xpass] decoded ${urls.length} urls from encrypted payload`)
+    } catch {}
+    // Fallback: raw body may contain urls even encrypted
+    const rawUrls = [...body.matchAll(/https?:\/\/[^'"\s]+\.(?:m3u8|mp4)[^'"\s]*/gi)].map(m => m[0])
+    for (const u of rawUrls) if (!isFakeHost(u)) found.add(u)
+    // Also try JSON parse if server ever returns JSON
+    try {
+      const json = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+      const srcs = json?.playlist?.[0]?.sources || json?.sources || []
+      for (const s of srcs) if (s?.file && s.file.startsWith('http') && !isFakeHost(s.file)) found.add(s.file)
+    } catch {}
+  } catch (e) {
+    console.log(`[xpass] encrypted collect failed: ${e.message?.slice(0,60)}`)
+  }
+  return [...found]
+}
+
 async function collectSources(paths, headers) {
   const found = new Set()
   await Promise.allSettled(
@@ -130,6 +180,7 @@ async function collectSources(paths, headers) {
         const res = await axios.get(`${XPLAY_HOST}${p}`, {
           headers,
           timeout: 3500,
+          family: 4,
           validateStatus: () => true,
         })
         if (res.status !== 200) return
@@ -151,6 +202,7 @@ async function resolveAndVerify(url, headers) {
     const res = await axios.get(url, {
       headers,
       timeout: 6000,
+      family: 4,
       maxRedirects: 6,
       responseType: 'arraybuffer',
       validateStatus: () => true,
@@ -190,6 +242,7 @@ async function verifyHls(masterUrl, masterBody, headers) {
   const variant = await axios.get(variantUrl, {
     headers,
     timeout: 5000,
+    family: 4,
     responseType: 'arraybuffer',
     validateStatus: () => true,
   })
@@ -211,6 +264,7 @@ async function segmentIsVideo(segUrl, headers) {
       method: 'GET',
       headers: { ...headers, Range: 'bytes=0-255' },
       timeout: 5000,
+      family: 4,
       responseType: 'arraybuffer',
       validateStatus: () => true,
     })
@@ -251,6 +305,7 @@ async function fetchSubtitles(suburl, html, paths, headers) {
       const res = await axios.get(`${XPLAY_HOST}${p}`, {
         headers,
         timeout: 4000,
+        family: 4,
         validateStatus: () => true,
       })
       const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
@@ -296,6 +351,7 @@ async function fetchSubtitleApi(suburl) {
     const res = await axios.get(suburl, {
       headers: { 'User-Agent': UA, Referer: 'https://play.xpass.top/' },
       timeout: 10000,
+      family: 4,
     })
     if (Array.isArray(res.data)) {
       return res.data.map((s) => ({ label: s.label || s.language || 'Unknown', file: resolveUrl(s.url || s.file, XPLAY_HOST) }))

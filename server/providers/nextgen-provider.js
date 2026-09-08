@@ -12,7 +12,11 @@ export default {
     const res = await axios.get(url, {
       headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
       timeout: 6000,
+      family: 4,
+      validateStatus: () => true,
     })
+    if (res.status === 404) throw new Error('nextgen: API 404 — provider may be deprecated')
+    if (res.status !== 200) throw new Error(`nextgen: HTTP ${res.status}`)
 
     const data = res.data
     if (data.status_code !== '200' || !data.data?.stream_urls?.length) {

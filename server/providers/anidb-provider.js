@@ -12,6 +12,7 @@ const tmdbApi = () => axios.create({
     ? { Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}` }
     : {},
   timeout: 10000,
+  family: 4,
 })
 
 async function tmdbTitle(tmdbId) {
@@ -38,6 +39,7 @@ async function searchId(title) {
       params: { q: title },
       headers: { 'User-Agent': UA },
       timeout: 15000,
+      family: 4,
     })
     const html = String(data)
     const matches = [...html.matchAll(/\/anime\/([A-Za-z0-9-]+-[0-9]+)[^>]*alt="([^"]+)"/g)]
@@ -55,6 +57,7 @@ async function episodes(id) {
     const { data } = await axios.get(`${BASE}/api/frontend/anime/${id}/episodes`, {
       headers: { 'User-Agent': UA },
       timeout: 15000,
+      family: 4,
     })
     if (!Array.isArray(data)) return []
     return data.map(e => ({ id: e.id, number: e.number }))
@@ -69,6 +72,7 @@ async function languageEmbedUrl(episodeId) {
     const { data } = await axios.get(`${BASE}/api/frontend/episode/${episodeId}/languages`, {
       headers: { 'User-Agent': UA },
       timeout: 15000,
+      family: 4,
     })
     if (!Array.isArray(data)) return null
     // ani-cli seeks "jpn" (sub) first, then "eng" (dub).
@@ -89,6 +93,7 @@ async function extractMaster(embedUrl) {
     const { data } = await axios.get(embedUrl, {
       headers: { 'User-Agent': UA, Referer: `${BASE}/` },
       timeout: 20000,
+      family: 4,
       maxRedirects: 5,
     })
     const html = String(data)

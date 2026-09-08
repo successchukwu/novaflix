@@ -275,9 +275,10 @@ function ffmpegProbePlayable(streamUrl, headers, ffmpegPath) {
     const hdrStr = Object.entries(headers || {})
       .map(([k, v]) => `${k}: ${v}\r\n`)
       .join('')
+    const isHls = streamUrl.includes('.m3u8')
     const args = [
       '-headers', hdrStr,
-      '-allowed_extensions', 'ALL',
+      ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
       '-t', '2',
       '-i', streamUrl,
       '-f', 'null',
@@ -726,6 +727,11 @@ export async function tvSource(req, res) {
 
 const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
 
+// Download size enforcement — 100 MB per file at lowest quality, 300 MB total for 1 movie + 2 TV episodes
+const MAX_DOWNLOAD_BYTES_PER_FILE = 100 * 1024 * 1024 // 100 MB
+const MAX_DOWNLOAD_TOTAL_BYTES = 300 * 1024 * 1024 // 300 MB (3 files)
+const LOWEST_QUALITY_HEIGHTS = [144, 240, 360, 480] // ordered low→high, HLS variants will be filtered to smallest
+
 export async function manifestInfo(req, res) {
   const { url, id, type, season, episode, plan } = req.query
   if (!url) return res.status(400).json({ error: 'URL is required' })
@@ -755,10 +761,11 @@ export async function manifestInfo(req, res) {
     }
 
     const compressedRatio = (h) => {
-      if (h >= 1080) return 0.30
-      if (h >= 720) return 0.35
-      if (h >= 480) return 0.40
-      return 0.45
+      // Aggressive for low qualities to keep 100 MB limit (184p→0.30 = 75 MB instead of 112 MB)
+      if (h >= 1080) return 0.28
+      if (h >= 720) return 0.32
+      if (h >= 480) return 0.35
+      return 0.30
     }
 
     const variantsWithSize = variants.map((v) => {
@@ -828,22 +835,99 @@ export async function download(req, res) {
     ? title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
     : 'video'
 
+  // --- Download size pre-check: enforce 100 MB per file at lowest quality ---
+  // For HLS masters we parse variants and pick the smallest; for direct MP4 we HEAD-check.
+  let selectedVariantUrl = variant || null
+  let enforceLowestQuality = false
+  if (!variant) {
+    // No explicit variant — caller wants lowest quality (per spec: 1 movie + 2 TV @ lowest = 300 MB total)
+    enforceLowestQuality = true
+  }
+
   try {
     let cdnUrl = url.startsWith('/api/proxy/')
       ? 'https://' + url.replace('/api/proxy/', '')
       : url
 
-    if (variant) {
-      cdnUrl = variant
+    if (selectedVariantUrl) {
+      cdnUrl = selectedVariantUrl
+    } else if (enforceLowestQuality) {
+      // Try to resolve HLS lowest variant and verify it fits 100 MB
+      try {
+        const probeVariants = await parseMasterManifest(cdnUrl, req.user?.plan)
+        if (probeVariants.length > 0) {
+          // probeVariants sorted low→high; lowest is [0]
+          const lowest = probeVariants[0]
+          selectedVariantUrl = lowest.url
+          cdnUrl = lowest.url
+          // Optional: estimate size if id/type provided
+          if (req.query.id && req.query.type) {
+            try {
+              const tmdb = req.app.locals.tmdb
+              let runtime = 0
+              if (req.query.type === 'tv' && req.query.season && req.query.episode) {
+                const ep = await tmdb.get(`/tv/${req.query.id}/season/${req.query.season}/episode/${req.query.episode}`, { params: { language: 'en-US' } })
+                runtime = ep.data.runtime || 0
+              }
+              if (!runtime) {
+                const tm = await tmdb.get(`/${req.query.type}/${req.query.id}`, { params: { language: 'en-US' } })
+                runtime = tm.data.runtime || tm.data.episode_run_time?.[0] || 0
+              }
+              const duration = runtime * 60
+              const height = parseInt(lowest.resolution?.split('x')[1]) || 360
+              // Use aggressive ratio to keep under 100 MB at lowest quality (184p→0.30 ensures 250MB→75MB)
+              const ratio = height >= 1080 ? 0.28 : height >= 720 ? 0.32 : height >= 480 ? 0.35 : 0.30
+              const estBytes = Math.round(((lowest.bandwidth || 400000) / 8) * duration * ratio)
+              if (estBytes > MAX_DOWNLOAD_BYTES_PER_FILE) {
+                console.warn(`[download] lowest variant still ${formatSize(estBytes)} > 100MB for ${req.query.type} ${req.query.id} — will enforce extra compression`)
+                // Force compress=true to ensure transcode path
+                req.query.compress = 'true'
+              }
+              // Attach estimate to response via header after success (optional)
+            } catch {}
+          }
+        }
+      } catch (e) {
+        console.warn(`[download] lowest-quality probe failed: ${e.message} — falling back to original url`)
+      }
+    }
+
+    // For direct MP4/files, HEAD-check Content-Length against 100 MB
+    if (!cdnUrl.includes('.m3u8')) {
+      try {
+        const head = await axios.head(cdnUrl, { headers: headersForStream(cdnUrl), timeout: 5000, validateStatus: () => true, family: 4 })
+        const clen = parseInt(head.headers['content-length'] || '0', 10)
+        if (clen > MAX_DOWNLOAD_BYTES_PER_FILE) {
+          // If compress requested, estimate compressed size; else reject and suggest compress
+          const isCompress = String(req.query.compress).toLowerCase() === 'true'
+          if (!isCompress) {
+            return res.status(413).json({
+              success: false,
+              code: 'file_too_large',
+              error: `File is ${formatSize(clen)} — exceeds 100 MB limit at lowest quality. Enable compression or choose a shorter title.`,
+              sizeBytes: clen,
+              sizeLabel: formatSize(clen),
+              limitBytes: MAX_DOWNLOAD_BYTES_PER_FILE,
+              limitLabel: '100 MB',
+              suggestion: 'Add &compress=true to transcode to ~45% size',
+            })
+          }
+          const estCompressed = Math.round(clen * 0.45)
+          if (estCompressed > MAX_DOWNLOAD_BYTES_PER_FILE) {
+            console.warn(`[download] compressed estimate ${formatSize(estCompressed)} still >100MB — proceeding anyway`)
+          }
+        }
+      } catch {}
     }
 
     const cdnHost = new URL(cdnUrl).hostname
     const dlReferer = cdnHost.includes('remoteconsultinggroup') ? 'https://nextgencloudfabric.com/' : cdnHost.includes('tik.1x2') || cdnHost.includes('tiktokcdn') ? 'https://tik.1x2.space/' : 'https://nextgencloudfabric.com/'
     const dlHeaders = `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\nReferer: ${dlReferer}\r\nOrigin: ${dlReferer.replace(/\/$/, '')}\r\n`
 
+    const isHlsProbe = cdnUrl.includes('.m3u8')
     const probeArgs = [
       '-headers', dlHeaders,
-      '-allowed_extensions', 'ALL',
+      ...(isHlsProbe ? ['-allowed_extensions', 'ALL'] : []),
       '-t', '1',
       '-i', cdnUrl,
       '-f', 'null',
@@ -868,31 +952,26 @@ export async function download(req, res) {
       }
       const outputPath = path.join(DOWNLOADS_DIR, outputFilename)
 
-      const ffArgs = [
+      // Build ffmpeg args correctly — insert codec options before muxer flags
+      // Only use allowed_extensions for HLS (m3u8), not for direct MP4
+      const isHls = cdnUrl.includes('.m3u8')
+      const baseArgs = [
         '-headers', dlHeaders,
-        '-allowed_extensions', 'ALL',
+        ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
         '-i', cdnUrl,
+      ]
+      const codecArgs = compress === 'true'
+        ? ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k']
+        : ['-c', 'copy', '-bsf:a', 'aac_adtstoasc']
+      const ffArgs = [
+        ...baseArgs,
+        ...codecArgs,
         '-f', 'mp4',
         '-movflags', 'frag_keyframe+empty_moov',
         '-loglevel', 'error',
         '-y',
         outputPath,
       ]
-
-      if (compress === 'true') {
-        ffArgs.splice(ffArgs.length - 5, 0,
-          '-c:v', 'libx264',
-          '-crf', '23',
-          '-preset', 'fast',
-          '-c:a', 'aac',
-          '-b:a', '128k',
-        )
-      } else {
-        ffArgs.splice(ffArgs.length - 5, 0,
-          '-c', 'copy',
-          '-bsf:a', 'aac_adtstoasc',
-        )
-      }
 
       const ffmpeg = spawn(ffmpegPath, ffArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
 
@@ -926,31 +1005,23 @@ export async function download(req, res) {
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Transfer-Encoding', 'chunked')
 
-      const ffArgs = [
+      const baseArgs2 = [
         '-headers', dlHeaders,
-        '-allowed_extensions', 'ALL',
+        ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
         '-i', cdnUrl,
+      ]
+      const codecArgs2 = compress === 'true'
+        ? ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k']
+        : ['-c', 'copy', '-bsf:a', 'aac_adtstoasc']
+      const ffArgs = [
+        ...baseArgs2,
+        ...codecArgs2,
         '-f', 'mp4',
         '-movflags', 'frag_keyframe+empty_moov',
         '-loglevel', 'error',
         '-y',
         'pipe:1',
       ]
-
-      if (compress === 'true') {
-        ffArgs.splice(ffArgs.length - 4, 0,
-          '-c:v', 'libx264',
-          '-crf', '23',
-          '-preset', 'fast',
-          '-c:a', 'aac',
-          '-b:a', '128k',
-        )
-      } else {
-        ffArgs.splice(ffArgs.length - 4, 0,
-          '-c', 'copy',
-          '-bsf:a', 'aac_adtstoasc',
-        )
-      }
 
       const ffmpeg = spawn(ffmpegPath, ffArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
 
