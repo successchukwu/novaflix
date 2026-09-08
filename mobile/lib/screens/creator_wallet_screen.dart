@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/wallet_provider.dart';
+import '../services/currency_service.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/layout/index.dart';
 
@@ -103,10 +104,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
   }
 
   String _formatAmount(double amount) {
-    return '₦${amount.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    )}';
+    return CurrencyService.format(amount);
   }
 
   @override
@@ -378,7 +376,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
                   const Text('Withdraw Earnings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
-                    'Minimum withdrawal: ₦10,000. Gateway fees are deducted from your balance.',
+                    'Minimum withdrawal: ${CurrencyService.format(10000)}. Gateway fees are deducted from your balance.',
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                   const SizedBox(height: 16),

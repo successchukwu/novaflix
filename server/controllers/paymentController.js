@@ -362,6 +362,44 @@ export async function gatewayInfo(req, res) {
   })
 }
 
+export async function webhookInfo(req, res) {
+  const baseUrl = process.env.APP_URL || `https://${req.get('host')}` || 'http://localhost:3030'
+  const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/payment/webhook`
+  const altUrl = `${baseUrl.replace(/\/$/, '')}/webhooks/paystack`
+  res.json({
+    success: true,
+    webhook: {
+      url: webhookUrl,
+      alternativeUrls: [altUrl, `${baseUrl.replace(/\/$/, '')}/api/webhooks/paystack`, `${baseUrl.replace(/\/$/, '')}/api/webhooks/flutterwave`],
+      method: 'POST',
+      events: {
+        paystack: ['charge.success', 'charge.failed', 'transfer.success', 'transfer.failed'],
+        flutterwave: ['charge.completed']
+      },
+      configured: {
+        paystack: isConfigured('paystack'),
+        flutterwave: isConfigured('flutterwave'),
+        paystackSecretSet: !!process.env.PAYSTACK_SECRET_KEY,
+        flutterwaveSecretSet: !!(process.env.FLW_SECRET_HASH || process.env.FLW_SECRET_KEY),
+      },
+      headers: {
+        paystack: 'x-paystack-signature (HMAC SHA512 of raw body with PAYSTACK_SECRET_KEY)',
+        flutterwave: 'verif-hash or x-flw-verif-hash (HMAC SHA256 of raw body with FLW_SECRET_HASH/FLW_SECRET_KEY)'
+      },
+      test: {
+        curlPaystack: `curl -X POST ${webhookUrl} -H "Content-Type: application/json" -H "x-paystack-signature: <signature>" -d '{"event":"charge.success","data":{"reference":"TEST-123","amount":150000}}'`,
+        curlFlutterwave: `curl -X POST ${webhookUrl} -H "Content-Type: application/json" -H "verif-hash: <hash>" -d '{"event":"charge.completed","data":{"tx_ref":"TEST-123","amount":1500,"status":"successful"}}'`
+      },
+      notes: [
+        'Webhook must be publicly accessible (use ngrok for localhost)',
+        'Raw body is used for signature verification (express.json verify captures req.rawBody)',
+        'Always returns 200 unless signature invalid (400), to prevent gateway retry storm',
+        'Handles all transaction types: subscription, tip, gift, membership, product, course, event_ticket'
+      ]
+    }
+  })
+}
+
 export async function publicSettings(req, res) {
   const currency = await getDefaultCurrency()
   res.json({ success: true, currency })

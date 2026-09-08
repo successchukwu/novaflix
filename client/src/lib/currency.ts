@@ -22,7 +22,6 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   XAF: 'FCFA',
   EGP: 'E£',
   MAD: 'MAD',
-  NGN: '₦',
 }
 
 let cachedCurrency: string | null = null

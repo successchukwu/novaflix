@@ -6,6 +6,7 @@ import Skeleton from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toast'
 import { useAuth } from '../lib/AuthContext'
 import { API_BASE } from '../lib/config'
+import { formatCurrency } from '../lib/currency'
 
 interface ReferralStat {
   total: number
@@ -137,7 +138,7 @@ export default function Referrals() {
           {[
             { label: 'Total Referrals', value: stats.total, icon: 'group' as const },
             { label: 'Converted', value: stats.converted, icon: 'check_circle' as const },
-            { label: 'Commission', value: `₦${stats.total_commission}`, icon: 'payments' as const },
+            { label: 'Commission', value: formatCurrency(stats.total_commission), icon: 'payments' as const },
           ].map((s) => (
             <div key={s.label} className="bg-surface-container-high border border-white/5 rounded-xl p-4 text-center">
               <Icon name={s.icon} className="text-primary-container mx-auto mb-2" />
@@ -171,7 +172,7 @@ export default function Referrals() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-on-surface-variant/60">{formatDate(r.created_at)}</p>
-                    {r.commission > 0 && <p className="text-xs text-secondary">+₦{r.commission}</p>}
+                    {r.commission > 0 && <p className="text-xs text-secondary">+{formatCurrency(r.commission)}</p>}
                   </div>
                 </div>
               ))}

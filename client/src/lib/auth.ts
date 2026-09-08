@@ -1658,18 +1658,6 @@ export async function deleteCreatorUpload(token: string, id: string): Promise<an
   } catch { return { success: false, error: 'Network error' } }
 }
 
-// Payment
-export async function initializePayment(token: string, plan: string, gateway?: string): Promise<any> {
-  try {
-    const res = await fetch(`${BASE}/payment/initialize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ plan, gateway }),
-    })
-    return res.json()
-  } catch { return { success: false, error: 'Network error' } }
-}
-
 export async function getGatewayInfo(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/payment/gateway-info`, {

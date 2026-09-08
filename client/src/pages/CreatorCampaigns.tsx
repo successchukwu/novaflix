@@ -128,7 +128,7 @@ export default function CreatorCampaigns() {
                 <Input type="number" value={String(form.max_impressions)} onChange={(e) => setForm({ ...form, max_impressions: parseInt(e.target.value) || 0 })} />
               </div>
               <div>
-                <label className="text-xs text-on-surface-variant mb-1 block">Budget (NGN)</label>
+                <label className="text-xs text-on-surface-variant mb-1 block">Budget</label>
                 <Input type="number" value={String(form.budget)} onChange={(e) => setForm({ ...form, budget: parseFloat(e.target.value) || 0 })} />
               </div>
               <div>

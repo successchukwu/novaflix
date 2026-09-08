@@ -4,12 +4,13 @@ import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
 import { API_BASE } from '../lib/config'
+import { formatCurrency } from '../lib/currency'
 
 const CREATOR_PLANS = [
   {
     id: 'student',
     name: 'Student',
-    price: '₦800',
+    price: 800,
     period: '/month',
     color: 'from-blue-600 to-blue-800',
     features: ['720p HD streaming', 'Ad-supported', '1 download device', 'Basic analytics'],
@@ -17,7 +18,7 @@ const CREATOR_PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: '₦1,500',
+    price: 1500,
     period: '/month',
     color: 'from-green-600 to-green-800',
     features: ['720p HD streaming', 'Ad-supported', '1 download device', 'Basic analytics', 'Priority support'],
@@ -25,7 +26,7 @@ const CREATOR_PLANS = [
   {
     id: 'standard',
     name: 'Standard',
-    price: '₦2,500',
+    price: 2500,
     period: '/month',
     color: 'from-purple-600 to-purple-800',
     featured: true,
@@ -34,7 +35,7 @@ const CREATOR_PLANS = [
   {
     id: 'premium',
     name: 'Premium',
-    price: '₦5,500',
+    price: 5500,
     period: '/month',
     color: 'from-accent to-red-800',
     features: ['4K HDR streaming', 'Ad-free', '6 download devices', 'Full analytics suite', '24/7 priority support', 'Watch parties', 'Spatial audio', 'Premier access'],
@@ -109,7 +110,7 @@ export default function CreatorPlanPicker() {
               <div className="p-6 pt-8">
                 <h3 className="text-headline-md font-bold text-on-surface mb-1">{plan.name}</h3>
                 <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-3xl font-bold text-on-surface">{plan.price}</span>
+                  <span className="text-3xl font-bold text-on-surface">{formatCurrency(plan.price)}</span>
                   <span className="text-on-surface-variant text-sm">{plan.period}</span>
                 </div>
 

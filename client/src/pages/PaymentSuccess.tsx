@@ -75,7 +75,7 @@ export default function PaymentSuccess() {
                       <span className="text-on-surface-variant">Original Price</span>
                       <span className="line-through text-on-surface-variant/60">{formatCurrency(paymentData.originalAmount)}</span>
                     </div>
-                  }
+                  )}
                   {paymentData.discount && (
                     <div className="flex justify-between text-green-400">
                       <span className="text-on-surface-variant">Discount</span>

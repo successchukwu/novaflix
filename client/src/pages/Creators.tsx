@@ -6,6 +6,7 @@ import SEOMeta from '../components/ui/SEOMeta'
 import { useAuth } from '../lib/AuthContext'
 import { getPublicCreators } from '../lib/api'
 import Perspective3DGridBackdrop from '../components/features/Perspective3DGridBackdrop'
+import { formatCurrency } from '../lib/currency'
 
 const fadeUp = {
   initial: { opacity: 0, y: 40 },
@@ -38,10 +39,10 @@ const steps = [
 ]
 
 const plans = [
-  { id: 'student', name: 'Student', price: '₦800', period: '/month', features: ['720p HD streaming', 'Basic analytics', '1 download device'] },
-  { id: 'basic', name: 'Basic', price: '₦1,500', period: '/month', features: ['720p HD streaming', 'Basic analytics', 'Priority support'] },
-  { id: 'standard', name: 'Standard', price: '₦2,500', period: '/month', featured: true, features: ['1080p Full HD', 'Advanced analytics', 'Early access to features', 'Ad-free experience'] },
-  { id: 'premium', name: 'Premium', price: '₦5,500', period: '/month', features: ['4K HDR streaming', 'Full analytics suite', 'Watch parties & premieres', 'Spatial audio'] },
+  { id: 'student', name: 'Student', price: 800, period: '/month', features: ['720p HD streaming', 'Basic analytics', '1 download device'] },
+  { id: 'basic', name: 'Basic', price: 1500, period: '/month', features: ['720p HD streaming', 'Basic analytics', 'Priority support'] },
+  { id: 'standard', name: 'Standard', price: 2500, period: '/month', featured: true, features: ['1080p Full HD', 'Advanced analytics', 'Early access to features', 'Ad-free experience'] },
+  { id: 'premium', name: 'Premium', price: 5500, period: '/month', features: ['4K HDR streaming', 'Full analytics suite', 'Watch parties & premieres', 'Spatial audio'] },
 ]
 
 const faqs = [
@@ -463,7 +464,7 @@ export default function Creators() {
               {p.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container text-xs font-semibold px-4 py-1 rounded-full whitespace-nowrap">Most Popular</span>}
               <h3 className="font-label-md text-label-md text-on-surface mb-2">{p.name}</h3>
               <div className="mb-5">
-                <span className="text-3xl font-bold text-on-surface">{p.price}</span>
+                <span className="text-3xl font-bold text-on-surface">{formatCurrency(p.price)}</span>
                 <span className="text-on-surface-variant text-sm">{p.period}</span>
               </div>
               <ul className="space-y-2.5 mb-6 flex-1">

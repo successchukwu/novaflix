@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/currency_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
@@ -616,7 +617,7 @@ class _PlanCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '₦${_formatPrice(price)}',
+                CurrencyService.format(price),
                 style: AppTypography.headlineLg.copyWith(
                   color: AppColors.onSurface,
                 ),
@@ -682,7 +683,7 @@ class _PlanCard extends StatelessWidget {
               child: Text(
                 isActive
                     ? 'Current Plan'
-                    : 'Subscribe — ₦${_formatPrice(price)}',
+                    : 'Subscribe — ${CurrencyService.format(price)}',
                 style: AppTypography.labelMd.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

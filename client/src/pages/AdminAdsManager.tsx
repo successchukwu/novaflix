@@ -7,6 +7,7 @@ import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
 import { API_BASE } from '../lib/config'
+import { formatCurrency } from '../lib/currency'
 
 type Tab = 'pending'|'approved'|'suspended'|'rejected'|'internal'|'pricing'
 
@@ -86,7 +87,7 @@ export default function AdminAdsManager() {
 
         {tab==='pricing' ? (
           <div className="bg-surface-container-high border border-white/5 rounded-xl p-6 space-y-4">
-            <h3 className="font-medium">Price per 1k impressions (NGN)</h3>
+            <h3 className="font-medium">Price per 1k impressions</h3>
             {pricing.map(p=> (
               <div key={p.position_type} className="flex items-center gap-3">
                 <span className="w-24 text-sm capitalize">{p.position_type}</span>
@@ -103,7 +104,7 @@ export default function AdminAdsManager() {
                   {c.creative_url && <img src={c.creative_url} alt="" className="w-16 h-16 rounded-lg object-cover bg-white/5" />}
                   <div>
                     <p className="text-sm font-medium">{c.advertiser_name} <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 ml-2">{c.channel||c.promotion_type}</span> {c.paid===false && <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 ml-1">Awaiting payment</span>}</p>
-                    <p className="text-xs text-on-surface-variant">{c.target_media_id ? `Content: ${c.target_media_id}` : 'Global'} · {c.budget? `₦${c.budget}`:''} · {c.current_impressions}/{c.max_impressions||'∞'}</p>
+                    <p className="text-xs text-on-surface-variant">{c.target_media_id ? `Content: ${c.target_media_id}` : 'Global'} · {c.budget? `${formatCurrency(c.budget)}`:''} · {c.current_impressions}/{c.max_impressions||'∞'}</p>
                     {c.rejection_reason && <p className="text-xs text-red-300 mt-1">Reason: {c.rejection_reason}</p>}
                   </div>
                 </div>

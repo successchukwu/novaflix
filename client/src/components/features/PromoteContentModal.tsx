@@ -4,6 +4,7 @@ import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Modal from '../ui/Modal'
 import { getToken } from '../../lib/auth'
+import { formatCurrency, getCurrencySymbol } from '../../lib/currency'
 
 interface Props {
   open: boolean
@@ -145,10 +146,10 @@ export default function PromoteContentModal({ open, onClose, content, onCreated 
             <div>
               <label className="text-xs text-on-surface-variant">Impressions (500 – 50,000)</label>
               <input type="range" min={500} max={50000} step={500} value={impressions} onChange={e=>setImpressions(Number(e.target.value))} className="w-full accent-primary" />
-              <div className="flex justify-between text-xs"><span>{impressions.toLocaleString()}</span><span className="text-on-surface-variant">{pricePerMille} NGN / 1k</span></div>
+              <div className="flex justify-between text-xs"><span>{impressions.toLocaleString()}</span><span className="text-on-surface-variant">{formatCurrency(pricePerMille)} / 1k</span></div>
             </div>
             <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 flex justify-between">
-              <span className="text-sm text-on-surface-variant">Budget</span><span className="text-lg font-bold">₦{budget.toLocaleString()}</span>
+              <span className="text-sm text-on-surface-variant">Budget</span><span className="text-lg font-bold">{formatCurrency(budget)}</span>
             </div>
             <div className="flex justify-between gap-2"><Button variant="ghost" onClick={()=>setStep(1)}>Back</Button><Button onClick={()=>setStep(3)} disabled={!canNext2}>Next</Button></div>
           </div>
@@ -160,7 +161,7 @@ export default function PromoteContentModal({ open, onClose, content, onCreated 
               <p><span className="text-on-surface-variant">Content:</span> {content.title}</p>
               <p><span className="text-on-surface-variant">Placement:</span> {position} {position==='mid_roll' ? `@ ${cueMinutes}min` : ''} · {duration}s</p>
               <p><span className="text-on-surface-variant">Reach:</span> {impressions.toLocaleString()} impressions</p>
-              <p className="font-bold">Total: ₦{budget.toLocaleString()}</p>
+              <p className="font-bold">Total: {formatCurrency(budget)}</p>
             </div>
 
             <div className="space-y-2">
@@ -168,14 +169,14 @@ export default function PromoteContentModal({ open, onClose, content, onCreated 
               {(['wallet','card','split'] as const).map(m=> (
                 <label key={m} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${payMethod===m?'bg-primary-container/15 border-primary-container':'bg-white/5 border-white/10'}`}>
                   <input type="radio" checked={payMethod===m} onChange={()=>setPayMethod(m)} className="accent-primary" />
-                  <span className="flex-1 text-sm capitalize">{m} {m==='wallet' && walletBalance!==null ? `— ₦${walletBalance.toLocaleString()} available` : ''}</span>
+                  <span className="flex-1 text-sm capitalize">{m} {m==='wallet' && walletBalance!==null ? `— ${formatCurrency(walletBalance)} available` : ''}</span>
                   {recommended===m && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-bold">★ Recommended</span>}
                 </label>
               ))}
               {payMethod==='split' && (
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className="text-xs text-on-surface-variant">Wallet part</label><Input type="number" value={String(walletPart)} onChange={e=>setWalletPart(Math.max(0, Math.min(Number(e.target.value)||0, walletBalance??0)))} /></div>
-                  <div><label className="text-xs text-on-surface-variant">Card part</label><div className="px-3 py-3 text-sm bg-white/5 rounded-xl">₦{cardPart.toLocaleString()}</div></div>
+                  <div><label className="text-xs text-on-surface-variant">Card part</label><div className="px-3 py-3 text-sm bg-white/5 rounded-xl">{formatCurrency(cardPart)}</div></div>
                 </div>
               )}
             </div>
@@ -184,7 +185,7 @@ export default function PromoteContentModal({ open, onClose, content, onCreated 
 
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={()=>setStep(2)}>Back</Button>
-              <Button onClick={handlePromote} loading={submitting} disabled={!canPay}>Promote — ₦{budget.toLocaleString()}</Button>
+              <Button onClick={handlePromote} loading={submitting} disabled={!canPay}>Promote — {formatCurrency(budget)}</Button>
             </div>
             <p className="text-[11px] text-on-surface-variant/60 text-center">You’ll be taken to the paywall. Admin approves after payment.</p>
           </div>

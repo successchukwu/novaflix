@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/currency_service.dart';
 
 class ClaimSuccessScreen extends StatelessWidget {
   const ClaimSuccessScreen({super.key});

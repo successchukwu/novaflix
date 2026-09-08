@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/currency_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
 import '../services/api_service.dart';

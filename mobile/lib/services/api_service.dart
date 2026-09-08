@@ -210,16 +210,38 @@ class ApiService {
     String type, {
     int? season,
     int? episode,
-  }) => _dio.get(
-    '/source',
-    queryParameters: {
-      'id': id,
-      'type': type,
-      if (season != null) 'season': season,
-      if (episode != null) 'episode': episode,
-    },
-    options: Options(receiveTimeout: const Duration(seconds: 55)),
-  );
+  }) {
+    if (type == 'tv') {
+      return _dio.get(
+        '/tv/$id/source',
+        queryParameters: {
+          if (season != null) 'season': season,
+          if (episode != null) 'episode': episode,
+        },
+        options: Options(receiveTimeout: const Duration(seconds: 55)),
+      );
+    }
+    if (type == 'movie') {
+      return _dio.get(
+        '/movie/$id/source',
+        queryParameters: {
+          if (season != null) 'season': season,
+          if (episode != null) 'episode': episode,
+        },
+        options: Options(receiveTimeout: const Duration(seconds: 55)),
+      );
+    }
+    return _dio.get(
+      '/source',
+      queryParameters: {
+        'id': id,
+        'type': type,
+        if (season != null) 'season': season,
+        if (episode != null) 'episode': episode,
+      },
+      options: Options(receiveTimeout: const Duration(seconds: 55)),
+    );
+  }
   Future<Response> getManifestInfo(
     String url, {
     int? id,
@@ -384,8 +406,11 @@ class ApiService {
   Future<Response> getPublicCreators() => get('/creator/public');
 
   Future<Response> getPricing() => get('/payment/pricing');
-  Future<Response> initializePayment(String plan, {String? gateway}) =>
-      post('/payment/initialize', data: {'plan': plan, if (gateway != null) 'gateway': gateway});
+  Future<Response> initializePayment(String plan, {String? gateway, String? promoCode}) =>
+      post('/payment/initialize', data: {'plan': plan, if (gateway != null) 'gateway': gateway, if (promoCode != null) 'promoCode': promoCode});
+  Future<Response> validatePromo(String code, String plan) =>
+      post('/payment/validate-promo', data: {'code': code, 'plan': plan});
+  Future<Response> getPublicSettings() => get('/payment/settings');
   Future<Response> verifyPayment(String reference, String plan) =>
       get('/payment/verify', params: {'reference': reference, 'plan': plan});
   Future<Response> getPaymentStatus() => get('/payment/status');

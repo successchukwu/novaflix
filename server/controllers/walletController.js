@@ -7,7 +7,6 @@ import {
   withdraw, 
   getWithdrawalPreview 
 } from '../services/walletService.js';
-import pool from '../config/database.js';
 
 export async function getBalance(req, res) {
   try {
