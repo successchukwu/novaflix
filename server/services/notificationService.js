@@ -1,5 +1,33 @@
 import pool from '../config/database.js'
 import { notifyUser } from './realtime.js'
+import { pushToSubscriptions as pushWeb } from './pushService.js'
+import webpush from 'web-push'
+
+async function pushViaFCM(subscriptions, payload) {
+  // FCM path: endpoint is FCM token (no p256dh/auth). Send via web_push if keys present, else via FCM HTTP v1 if configured
+  const fcmTokens = subscriptions.filter(s => !s.p256dh || !s.auth || s.p256dh === '')
+  const webSubs = subscriptions.filter(s => s.p256dh && s.auth && s.p256dh !== '')
+  let sent = 0
+  if (webSubs.length > 0) {
+    try { sent += await pushWeb(webSubs, payload) } catch {}
+  }
+  if (fcmTokens.length > 0) {
+    // Try Firebase Admin if available, otherwise fallback to web_push with empty keys will be ignored
+    try {
+      const { default: admin } = await import('firebase-admin').catch(() => ({ default: null }))
+      if (admin && admin.messaging) {
+        const results = await Promise.allSettled(fcmTokens.map(t => admin.messaging().send({ token: t.endpoint, notification: { title: payload.title, body: payload.body }, data: payload.data ? Object.fromEntries(Object.entries(payload.data).map(([k,v]) => [k,String(v)])) : {} }).catch(async err => {
+          if (err?.code === 'messaging/registration-token-not-registered') {
+            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [t.endpoint])
+          }
+          throw err
+        })))
+        sent += results.filter(r => r.status === 'fulfilled').length
+      }
+    } catch {}
+  }
+  return sent
+}
 
 export async function createAndSendNotification({
   userId, type, title, body, link, actorId, metadata = {}
@@ -8,19 +36,19 @@ export async function createAndSendNotification({
     userId, type, title, body, link, actorId, metadata
   })
 
-  // Real-time if user online
+  // Real-time if user online — WsService webhook push to device
   notifyUser(userId, { type: 'notification', notification })
 
-  // Push notification if user offline
+  // Push notification if user offline — web_push + FCM realtime push to device
   const subscriptions = await getPushSubscriptionsForUser(userId)
   if (subscriptions.length > 0) {
-    await pushToSubscriptions(subscriptions, {
+    await pushViaFCM(subscriptions, {
       title,
       body,
       icon: '/icons/icon-192.svg',
       badge: '/icons/icon-192.svg',
-      data: { url: link, tag: `notification-${notification.id}` }
-    })
+      data: { url: link || '/', tag: `notification-${notification.id}` }
+    }).catch(() => {})
   }
 
   return notification
@@ -170,9 +198,8 @@ async function getPushSubscriptionsForUser(userId) {
 }
 
 async function pushToSubscriptions(subscriptions, payload) {
-  const webpush = require('web-push')
   const results = await Promise.allSettled(
-    subscriptions.map(sub => 
+    subscriptions.map(sub =>
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         JSON.stringify(payload)

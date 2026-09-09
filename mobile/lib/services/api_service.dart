@@ -680,6 +680,8 @@ class ApiService {
   Future<Response> getTriviaStreak() => get('/trivia/streak');
   Future<Response> getTriviaLeaderboard() => get('/trivia/leaderboard');
   Future<Response> getGuessMovie() => get('/trivia/guess');
+  Future<Response> getTriviaStatus() => get('/trivia/status');
+  Future<Response> getGuessStatus() => get('/trivia/guess');
   Future<Response> submitGuess(String questionId, int answerIndex) =>
       post('/trivia/guess/submit', data: {'questionId': questionId, 'answerIndex': answerIndex});
   Future<Response> getCoinsBalance() => get('/trivia/coins');

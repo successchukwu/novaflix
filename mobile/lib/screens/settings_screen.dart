@@ -79,6 +79,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             watchlistUpdates: notif['watchlistUpdates'] as bool? ?? store.notificationSettings.watchlistUpdates,
             creatorActivity: notif['creatorActivity'] as bool? ?? store.notificationSettings.creatorActivity,
             marketing: notif['marketing'] as bool? ?? store.notificationSettings.marketing,
+            pushEnabled: notif['pushEnabled'] as bool? ?? store.notificationSettings.pushEnabled,
+            commentReply: notif['commentReply'] as bool? ?? store.notificationSettings.commentReply,
+            sound: notif['sound'] as bool? ?? store.notificationSettings.sound,
           ),
         );
       }
@@ -134,7 +137,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() { _profileMsg = 'Profile updated'; _profileMsgIsError = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _profileMsg = 'Failed to update: $e'; _profileMsgIsError = true; });
+      // fix bioexception bad response — use friendlyErrorMessage instead of raw DioException
+      setState(() { _profileMsg = friendlyErrorMessage(e); _profileMsgIsError = true; });
     } finally {
       if (mounted) setState(() => _profileSaving = false);
     }
@@ -161,7 +165,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _pwError = 'Failed to update password: $e');
+      setState(() => _pwError = friendlyErrorMessage(e));
     } finally {
       if (mounted) setState(() => _pwSaving = false);
     }
@@ -177,7 +181,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) context.go('/home');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete account: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -355,6 +359,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ]),
           const SizedBox(height: 24),
           _section('Notifications', [
+            _notifSwitch(store, Icons.notifications_active, 'Push Notifications', 'Enable device push (FCM / web_push)', store.notificationSettings.pushEnabled, (v) {
+              ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(pushEnabled: v));
+              _syncServerSettings();
+            }),
             _notifSwitch(store, Icons.notifications_active, 'New Releases', 'Get notified about new content', store.notificationSettings.newReleases, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(newReleases: v));
               _syncServerSettings();
@@ -365,6 +373,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }),
             _notifSwitch(store, Icons.campaign, 'Creator Activity', 'Updates from creators you follow', store.notificationSettings.creatorActivity, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(creatorActivity: v));
+              _syncServerSettings();
+            }),
+            _notifSwitch(store, Icons.mode_comment, 'Comment Reply', 'Replies to your comments', store.notificationSettings.commentReply, (v) {
+              ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(commentReply: v));
+              _syncServerSettings();
+            }),
+            _notifSwitch(store, Icons.volume_up, 'Sound', 'Play sound for notifications', store.notificationSettings.sound, (v) {
+              ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(sound: v));
               _syncServerSettings();
             }),
             _notifSwitch(store, Icons.local_offer, 'Marketing', 'Promotions and offers', store.notificationSettings.marketing, (v) {

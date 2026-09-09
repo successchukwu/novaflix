@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/currency_service.dart';
@@ -8,7 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
 import '../core/responsive.dart';
-import '../widgets/features/index.dart';
+
 
 final _pricingProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -24,13 +25,35 @@ final _gatewayProvider = FutureProvider<Map<String, dynamic>>((ref) async {
       : <String, dynamic>{};
 });
 
-class PricingScreen extends ConsumerWidget {
+class PricingScreen extends ConsumerStatefulWidget {
   final String? upgrade;
 
   const PricingScreen({super.key, this.upgrade});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PricingScreen> createState() => _PricingScreenState();
+}
+
+class _PricingScreenState extends ConsumerState<PricingScreen> {
+  // promo code injection from link (searchParams.get('code') parity)
+  String _initialPromoCode = '';
+  bool _promoInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_promoInitialized) {
+      final code = GoRouterState.of(context).uri.queryParameters['code'];
+      if (code != null && code.isNotEmpty) {
+        _initialPromoCode = code.toUpperCase();
+      }
+      // also check upgrade query param fallback
+      _promoInitialized = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final pricing = ref.watch(_pricingProvider);
     final user = ref.watch(authProvider).user;
     final width = MediaQuery.sizeOf(context).width;
@@ -62,16 +85,7 @@ class PricingScreen extends ConsumerWidget {
           if (plans.isEmpty) {
             return const Center(child: Text('No plans available'));
           }
-          final allFeatures = plans.fold<List<String>>(
-            [],
-            (acc, p) {
-              for (final f in (p['features'] as List? ?? [])) {
-                if (!acc.contains(f.toString())) acc.add(f.toString());
-              }
-              return acc;
-            },
-          );
-          final selectedSlug = upgrade ?? user?.plan ?? 'standard';
+          final selectedSlug = widget.upgrade ?? user?.plan ?? 'standard';
           final activePlan = user?.plan;
 
           return SingleChildScrollView(
@@ -209,7 +223,8 @@ class PricingScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Map<String, dynamic> plan,
-  ) async {    final gateways = ref.read(_gatewayProvider).value ??
+  ) async {
+    final gateways = ref.read(_gatewayProvider).value ??
         {'flutterwave': {'configured': true}, 'paystack': {'configured': false}};
     final gw = gateways['gateways'] is Map
         ? Map<String, dynamic>.from(gateways['gateways'] as Map)
@@ -223,7 +238,48 @@ class PricingScreen extends ConsumerWidget {
             ? Map<String, dynamic>.from(gw['paystack'] as Map)
             : {'configured': false};
     String gateway = 'flutterwave';
+    // default gateway parity with web: prefer configured
+    if (flutterwave['configured'] != true && paystack['configured'] == true) {
+      gateway = 'paystack';
+    }
     bool busy = false;
+
+    // promo code state - injection from link + manual input
+    final promoCtl = TextEditingController(text: _initialPromoCode);
+    String? promoCode = _initialPromoCode.isNotEmpty ? _initialPromoCode : null;
+    Map<String, dynamic>? promoValid; // {valid, discount, total, originalAmount, error}
+    bool promoApplying = false;
+    String? promoError;
+
+    Future<void> validatePromo(String code) async {
+      if (code.trim().isEmpty) return;
+      try {
+        final api = ref.read(apiServiceProvider);
+        final res = await api.validatePromo(code.trim().toUpperCase(), plan['slug'].toString());
+        final data = res.data as Map<String, dynamic>;
+        final isValid = data['valid'] == true || data['success'] == true && data['valid'] != false;
+        if (isValid || data['discount'] != null) {
+          promoValid = {
+            'valid': true,
+            'discount': data['discount'],
+            'total': data['total'] ?? data['amount'],
+            'originalAmount': data['originalAmount'] ?? data['original_amount'],
+          };
+          promoError = null;
+        } else {
+          promoValid = {'valid': false};
+          promoError = data['error']?.toString() ?? 'Invalid promo code';
+        }
+      } catch (e) {
+        promoValid = {'valid': false};
+        promoError = friendlyErrorMessage(e);
+      }
+    }
+
+    // auto-validate if code came from link
+    if (promoCode != null && promoCode.isNotEmpty) {
+      await validatePromo(promoCode);
+    }
 
     await showDialog(
       context: context,
@@ -232,6 +288,8 @@ class PricingScreen extends ConsumerWidget {
         builder: (ctx, setDialog) {
           final canPay =
               gateway != 'paystack' || (paystack['configured'] == true);
+          final gatewayNotConfigured = (gateway == 'paystack' && paystack['configured'] != true) ||
+              (gateway == 'flutterwave' && flutterwave['configured'] != true);
           return Dialog(
             backgroundColor: AppColors.surfaceContainerHigh,
             shape: RoundedRectangleBorder(
@@ -244,7 +302,7 @@ class PricingScreen extends ConsumerWidget {
               width: MediaQuery.sizeOf(ctx).width >= 468
                   ? 420
                   : MediaQuery.sizeOf(ctx).width - 32,
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -274,6 +332,106 @@ class PricingScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    // promo code injection + manual input (parity with Pricing.tsx)
+                    Text(
+                      'PROMO CODE',
+                      style: AppTypography.labelSm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: promoCtl,
+                            textCapitalization: TextCapitalization.characters,
+                            onChanged: (v) {
+                              promoCode = v.toUpperCase();
+                              promoValid = null;
+                              promoError = null;
+                              setDialog(() {});
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Enter promo code',
+                              hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
+                              filled: true,
+                              fillColor: AppColors.surfaceContainer,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: AppColors.white.withValues(alpha: 0.1)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: AppColors.white.withValues(alpha: 0.1)),
+                              ),
+                            ),
+                            style: const TextStyle(color: AppColors.onSurface, fontSize: 14),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 44,
+                          child: FilledButton(
+                            onPressed: promoApplying || promoCtl.text.trim().isEmpty
+                                ? null
+                                : () async {
+                                    setDialog(() => promoApplying = true);
+                                    await validatePromo(promoCtl.text);
+                                    if (ctx.mounted) setDialog(() => promoApplying = false);
+                                  },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primaryContainer,
+                              foregroundColor: AppColors.onPrimaryContainer,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            child: promoApplying
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Text('Apply'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (promoValid?['valid'] == true) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Promo applied! You save ${CurrencyService.format(promoValid!['discount'] as num? ?? 0)}',
+                        style: const TextStyle(color: Colors.greenAccent, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainer,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                              const Text('Original price', style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13)),
+                              Text(CurrencyService.format(promoValid!['originalAmount'] as num? ?? plan['price'] as num? ?? 0), style: const TextStyle(color: AppColors.onSurface, fontSize: 13)),
+                            ]),
+                            const SizedBox(height: 4),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                              const Text('Discount', style: TextStyle(color: Colors.greenAccent, fontSize: 13)),
+                              Text('-${CurrencyService.format(promoValid!['discount'] as num? ?? 0)}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w700, fontSize: 13)),
+                            ]),
+                            const Divider(height: 16, color: AppColors.outlineVariant),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                              const Text('Total to pay', style: TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
+                              Text(CurrencyService.format(promoValid!['total'] as num? ?? 0), style: const TextStyle(color: AppColors.primaryContainer, fontWeight: FontWeight.w700)),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (promoValid?['valid'] == false && promoError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(promoError!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                    ],
+                    const SizedBox(height: 20),
                     Text(
                       'SELECT PAYMENT METHOD',
                       style: AppTypography.labelSm.copyWith(
@@ -296,32 +454,53 @@ class PricingScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: !canPay || busy
+                      onPressed: !canPay || busy || gatewayNotConfigured
                           ? null
                           : () async {
                               setDialog(() => busy = true);
                               try {
                                 final api = ref.read(apiServiceProvider);
+                                final effectivePromo = promoValid?['valid'] == true ? promoCtl.text.trim().toUpperCase() : null;
                                 final res = await api.initializePayment(
                                   plan['slug'].toString(),
                                   gateway: gateway,
+                                  promoCode: effectivePromo,
                                 );
                                 final body = res.data is Map
                                     ? res.data as Map
                                     : <String, dynamic>{};
-                                final url = body['authorization_url'];
-                                if (url != null && url.toString().isNotEmpty) {
+                                final url = body['authorization_url']?.toString();
+                                final reference = body['reference']?.toString() ?? '';
+                                if (url != null && url.isNotEmpty) {
                                   if (ctx.mounted) Navigator.of(ctx).pop();
                                   if (context.mounted) {
-                                    context.push(
-                                      '/payment-success?reference=${body['reference'] ?? ''}&plan=${plan['slug']}',
+                                    // WebView for payment with authorization_url and verifyPayment realtime
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => _PaymentWebViewScreen(
+                                          authorizationUrl: url,
+                                          reference: reference,
+                                          plan: plan['slug'].toString(),
+                                          gateway: gateway,
+                                        ),
+                                      ),
                                     );
                                   }
                                 } else {
                                   setDialog(() => busy = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text(body['error']?.toString() ?? 'Failed to initialize payment')),
+                                    );
+                                  }
                                 }
-                              } catch (_) {
-                                if (ctx.mounted) setDialog(() => busy = false);
+                              } catch (e) {
+                                if (ctx.mounted) {
+                                  setDialog(() => busy = false);
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(friendlyErrorMessage(e))),
+                                  );
+                                }
                               }
                             },
                       style: FilledButton.styleFrom(
@@ -339,8 +518,8 @@ class PricingScreen extends ConsumerWidget {
                               ),
                             )
                           : Text(
-                              !canPay
-                                  ? 'Paystack unavailable'
+                              gatewayNotConfigured
+                                  ? '${gateway == 'paystack' ? 'Paystack' : 'Flutterwave'} unavailable'
                                   : 'Pay Now',
                             ),
                     ),
@@ -504,6 +683,141 @@ class PricingScreen extends ConsumerWidget {
   }
 }
 
+/// WebView for payment with authorization_url and verifyPayment realtime
+/// Handles gateway flutterwave/paystack via hosted checkout URL.
+class _PaymentWebViewScreen extends StatefulWidget {
+  final String authorizationUrl;
+  final String reference;
+  final String plan;
+  final String gateway;
+
+  const _PaymentWebViewScreen({
+    required this.authorizationUrl,
+    required this.reference,
+    required this.plan,
+    required this.gateway,
+  });
+
+  @override
+  State<_PaymentWebViewScreen> createState() => _PaymentWebViewScreenState();
+}
+
+class _PaymentWebViewScreenState extends State<_PaymentWebViewScreen> {
+  late final WebViewController _controller;
+  bool _verifying = false;
+  bool _handling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(AppColors.background)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          final url = request.url.toLowerCase();
+          // Detect success/callback redirects from flutterwave/paystack hosted pages
+          if (url.contains('payment-success') ||
+              url.contains('callback') ||
+              url.contains('verify') ||
+              (widget.reference.isNotEmpty && url.contains(widget.reference.toLowerCase())) ||
+              url.contains('status=successful') ||
+              url.contains('status=success')) {
+            _verifyPaymentRealtime();
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
+        onPageFinished: (url) {
+          final lower = url.toLowerCase();
+          if (lower.contains('payment-success') ||
+              lower.contains('callback') ||
+              (widget.reference.isNotEmpty && lower.contains(widget.reference.toLowerCase()))) {
+            _verifyPaymentRealtime();
+          }
+        },
+      ))
+      ..loadRequest(Uri.parse(widget.authorizationUrl));
+  }
+
+  Future<void> _verifyPaymentRealtime() async {
+    if (_handling) return;
+    _handling = true;
+    if (mounted) setState(() => _verifying = true);
+    try {
+      // Use ApiService verifyPayment realtime
+      final container = ProviderScope.containerOf(context);
+      final api = container.read(apiServiceProvider);
+      final res = await api.verifyPayment(widget.reference, widget.plan);
+      final data = res.data is Map ? res.data as Map : {};
+      final success = data['success'] == true || data['status'] == 'success' || res.statusCode == 200;
+      if (!mounted) return;
+      if (success) {
+        Navigator.of(context).pop();
+        context.go('/payment-success?reference=${widget.reference}&plan=${widget.plan}');
+      } else {
+        if (mounted) setState(() => _verifying = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?.toString() ?? 'Verification pending. Please wait.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _verifying = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyErrorMessage(e))),
+      );
+    } finally {
+      _handling = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: AppColors.onSurface),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text('Secure Payment — ${widget.gateway}', style: AppTypography.labelLg),
+        actions: [
+          if (_verifying)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+            ),
+          TextButton(
+            onPressed: _verifying ? null : _verifyPaymentRealtime,
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_verifying)
+            Container(
+              color: Colors.black.withValues(alpha: 0.4),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.primaryContainer),
+                    SizedBox(height: 12),
+                    Text('Verifying payment...', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PlanCard extends StatelessWidget {
   final Map<String, dynamic> plan;
   final bool selected;
@@ -528,6 +842,7 @@ class _PlanCard extends StatelessWidget {
         .toList();
     final isPopular = slug == 'standard';
 
+    // plan selection UI card contain no overlay — pure Container + Column, no Stack overlay blocking taps
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

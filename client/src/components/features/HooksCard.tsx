@@ -379,12 +379,15 @@ export default function HooksCard({
 
       {/* Interaction stack */}
       <div className="absolute right-4 bottom-24 md:bottom-28 flex flex-col items-center gap-5 md:gap-6 z-10">
-        {/* Profile target with layered plus badge — shorts have creators; trailers don't */}
+        {/* Profile linked to creator — shorts have creators; trailers don't */}
         {isShort && (
           <button
             type="button"
             className="relative"
-            onClick={() => { if (item.creatorName) navigate(`/profile/${item.creatorName}`) }}
+            onClick={() => {
+              if (item.creatorId) navigate(`/creators/${item.creatorId}`)
+              else if (item.creatorName) navigate(`/profile/${item.creatorName}`)
+            }}
             aria-label={item.creatorName ? `View ${item.creatorName}` : 'View profile'}
           >
             <span className="w-12 h-12 rounded-full border-2 border-white bg-neutral-700 flex items-center justify-center overflow-hidden">

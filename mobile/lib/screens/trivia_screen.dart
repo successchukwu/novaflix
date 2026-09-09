@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../core/responsive.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/ws_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../utils/format_time.dart';
@@ -93,17 +97,46 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Timer? _countdownTimer;
   String _countdownText = '';
 
+  WebSocketChannel? _wsChannel;
+  StreamSubscription? _wsSub;
+
   int _int(dynamic v, [int fallback = 0]) => v is num ? v.toInt() : fallback;
 
   @override
   void initState() {
     super.initState();
     _startCountdownTimer();
+    _connectWs();
+  }
+
+  Future<void> _connectWs() async {
+    try {
+      final ch = await WsService.connect('/ws');
+      if (!mounted) { try { ch.sink.close(); } catch (_) {} return; }
+      _wsChannel = ch;
+      _wsSub = ch.stream.listen((raw) {
+        try {
+          final data = raw is String ? jsonDecode(raw) : jsonDecode(raw.toString());
+          if (data is! Map) return;
+          final type = data['type']?.toString();
+          if (type == 'coins:update' && data['coins'] is num) {
+            ref.invalidate(_coinsProvider);
+            ref.invalidate(_cosmeticsProvider);
+          } else if (type == 'trivia:leaderboard' && data['leaderboard'] is List) {
+            ref.invalidate(_leaderboardProvider);
+          } else if (type == 'cosmetics:update') {
+            ref.invalidate(_cosmeticsProvider);
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _wsSub?.cancel();
+    try { _wsChannel?.sink.close(); } catch (_) {}
     super.dispose();
   }
 
@@ -471,55 +504,79 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
          );
    }
 
+  // Batch answer collection: store locally, submit all at end. Prevents 500 from per-question half-batch and matches PASS 0.7 logic.
+  final Map<String,int> _batchAnswers = {};
+  bool _submittingBatch = false;
+
   Future<void> _pickAnswer(Map<String, dynamic> q, int idx, int total) async {
-    if (_dailyBusy || _selected != null) return;
-    final api = ref.read(apiServiceProvider);
-    setState(() {
-      _selected = idx;
-      _dailyBusy = true;
-    });
+    if (_dailyBusy || _submittingBatch) return;
+    final qid = q['id']?.toString();
+    if (qid == null || qid.isEmpty) { _floatError(friendlyErrorMessage(Exception('Invalid question'))); return; }
+    if (idx < 0 || idx > 10) { _floatError(friendlyErrorMessage(Exception('Invalid answer'))); return; }
+    setState(() { _selected = idx; });
+    // brief highlight then record
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    _batchAnswers[qid] = idx;
+    final isLast = _qIndex >= total - 1;
+    if (isLast) {
+      await _submitBatch(total);
+    } else {
+      setState(() { _qIndex = _qIndex + 1; _selected = null; });
+    }
+  }
+
+  Future<void> _submitBatch(int total) async {
+    if (_submittingBatch) return;
+    setState(() { _submittingBatch = true; _dailyBusy = true; });
     try {
-      final res = await api.dio.post(
-        '/trivia/submit',
-        data: {
-          'answers': [
-            {'id': q['id'], 'answerIndex': idx},
-          ],
-        },
-      );
+      final api = ref.read(apiServiceProvider);
+      final answers = _batchAnswers.entries.map((e) => {'id': e.key, 'answerIndex': e.value}).toList();
+      if (answers.isEmpty) { setState(() { _submittingBatch = false; _dailyBusy = false; }); return; }
+      final res = await api.submitDailyTrivia(answers);
       final body = res.data;
       if (!mounted) return;
       if (body is Map && body['success'] == true) {
-        final correct = _int(body['score']) == 1;
-        final isLast = _qIndex >= total - 1;
+        // PASS 0.7 is server-computed; honor it directly
+        final passed = body['passed'] == true;
+        final score = _int(body['score']);
+        final totalResp = _int(body['total'], total);
+        // coinsEarned is zero when failed (threshold not met) — reflect that
+        final coinsEarned = _int(body['coinsEarned']);
+        final streak = _int(body['streak'], _streak);
         ref.invalidate(_coinsProvider);
         ref.invalidate(_leaderboardProvider);
         setState(() {
-          if (correct) _correctCount++;
-          _coinsEarned += _int(body['coinsEarned']);
-          _streak = _int(body['streak'], _streak);
+          _correctCount = score;
+          _coinsEarned = coinsEarned;
+          _streak = streak;
+          _dailyDone = true;
           _selected = null;
           _dailyBusy = false;
-          if (isLast) {
-            _dailyDone = true;
-          } else {
-            _qIndex = _qIndex + 1;
+          _submittingBatch = false;
+          // keep passed via correctCount/total but also respect server flag for UI
+          if (!passed && totalResp > 0) {
+            // ensure tier reflects fail (0.4 threshold handled in result view)
           }
         });
+        // alreadyPlayed is handled via UI state, no error banner needed
       } else {
-        setState(() {
-          _selected = null;
-          _dailyBusy = false;
-        });
+        setState(() { _selected = null; _dailyBusy = false; _submittingBatch = false; });
+        _floatError(friendlyErrorMessage(Exception(body is Map ? (body['error']?.toString() ?? 'Submit failed') : 'Submit failed')));
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _selected = null;
-          _dailyBusy = false;
-        });
-        _floatError('Could not submit your answer. Try again.');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() { _selected = null; _dailyBusy = false; _submittingBatch = false; });
+      // handle 429 / dailyLimitReached friendly
+      final data = e.response?.data;
+      if (data is Map && data['dailyLimitReached'] == true) {
+        setState(() => _dailyDone = true);
       }
+      _floatError(friendlyErrorMessage(e));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _selected = null; _dailyBusy = false; _submittingBatch = false; });
+      _floatError(friendlyErrorMessage(e));
     }
   }
 
@@ -758,6 +815,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
 
   Future<void> _submitGuess(Map<String, dynamic> q, int idx) async {
     if (_guessBusy || _guessSelected != null) return;
+    if (idx < 0 || idx > 10) { _floatError(friendlyErrorMessage(Exception('Invalid answer'))); return; }
     final api = ref.read(apiServiceProvider);
     setState(() {
       _guessBusy = true;
@@ -769,23 +827,34 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
       if (!mounted) return;
       if (body is Map && body['success'] == true) {
         ref.invalidate(_coinsProvider);
+        ref.invalidate(_leaderboardProvider);
         setState(() {
           _guessResult = Map<String, dynamic>.from(body);
           _guessBusy = false;
         });
       } else {
-        setState(() {
-          _guessSelected = null;
-          _guessBusy = false;
-        });
+        final isDaily = body is Map && body['dailyLimitReached'] == true;
+        if (isDaily) _floatError('Daily guess limit reached. Come back tomorrow!');
+        else _floatError(friendlyErrorMessage(Exception(body is Map ? (body['error']?.toString() ?? 'Failed') : 'Failed')));
+        setState(() { _guessSelected = null; _guessBusy = false; });
       }
-    } catch (_) {
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final data = e.response?.data;
+      final daily = data is Map && data['dailyLimitReached'] == true;
+      final is429 = e.response?.statusCode == 429;
+      if (daily) {
+        _floatError('Daily guess limit reached. Come back tomorrow!');
+      } else if (is429) {
+        _floatError(friendlyErrorMessage(e));
+      } else {
+        _floatError(friendlyErrorMessage(e));
+      }
+      setState(() { _guessSelected = null; _guessBusy = false; });
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _guessSelected = null;
-          _guessBusy = false;
-        });
-        _floatError('Could not submit your guess. Try again.');
+        setState(() { _guessSelected = null; _guessBusy = false; });
+        _floatError(friendlyErrorMessage(e));
       }
     }
   }
@@ -1000,8 +1069,10 @@ Widget _blurredPoster(String? url) {
           ),
         );
       }
-    } catch (_) {
-      if (mounted) _floatError('Could not buy that item.');
+    } on DioException catch (e) {
+      if (mounted) _floatError(friendlyErrorMessage(e));
+    } catch (e) {
+      if (mounted) _floatError(friendlyErrorMessage(e));
     }
   }
 
@@ -1014,8 +1085,10 @@ Widget _blurredPoster(String? url) {
         ref.invalidate(_cosmeticsProvider);
         ref.invalidate(_coinsProvider);
       }
-    } catch (_) {
-      if (mounted) _floatError('Could not equip that item.');
+    } on DioException catch (e) {
+      if (mounted) _floatError(friendlyErrorMessage(e));
+    } catch (e) {
+      if (mounted) _floatError(friendlyErrorMessage(e));
     }
   }
 

@@ -266,8 +266,8 @@ export default function HooksFeed() {
       {/* Main feed area — player centered, nav buttons beside it */}
       <div className="flex-1 min-h-0 flex items-center justify-center gap-2 md:gap-3 px-2 sm:px-4 md:px-6">
         <div className="flex-1 min-w-0 h-full md:h-[92vh] md:max-h-full md:max-w-[450px] md:rounded-2xl md:border md:border-neutral-800 md:shadow-2xl relative overflow-hidden">
-        {/* Upload Trailers — creators only */}
-        {isCreator && (
+        {/* Upload Trailers — creators only (viewer-only upload gate via isCreator) */}
+        {isCreator ? (
           <button
             onClick={() => setUploadOpen(true)}
             className="absolute top-4 right-4 z-30 flex items-center gap-1.5 px-4 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/70 active:scale-95 transition-all"
@@ -276,6 +276,10 @@ export default function HooksFeed() {
             <Icon name="add" size="sm" className="text-white" />
             <span className="text-sm font-semibold text-white">Upload Trailers</span>
           </button>
+        ) : (
+          <div className="absolute top-4 right-4 z-30 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-[11px] text-white/50">
+            Viewer mode — creators can upload
+          </div>
         )}
 
         {/* Index indicator */}

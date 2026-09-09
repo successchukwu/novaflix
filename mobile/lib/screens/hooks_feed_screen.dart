@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../services/api_service.dart';
 import '../core/responsive.dart';
 import '../widgets/ui/index.dart';
+import '../providers/auth_provider.dart';
 
 final _hooksProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -89,6 +90,8 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
     final hooks = ref.watch(_hooksProvider);
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = screenSizeFor(width) != ScreenSize.mobile;
+    final authState = ref.watch(authProvider);
+    final isCreator = authState.user?.isCreator == true || authState.user?.isAdmin == true;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -141,6 +144,8 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
   }
 
   Widget _phoneFrame(List<Map<String, dynamic>> items) {
+    final authState = ref.watch(authProvider);
+    final isCreator = authState.user?.isCreator == true || authState.user?.isAdmin == true;
     return AspectRatio(
       aspectRatio: 9 / 16,
       child: Container(
@@ -181,36 +186,54 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
               ),
             ),
           ),
-          Positioned(
-            top: 16,
-            right: 16,
-            child: GestureDetector(
-              onTap: () => _showUploadModal(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
-                    Text(
-                      'Upload Trailers',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+          if (isCreator)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => _showUploadModal(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Upload Trailers',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+          if (!isCreator)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: const Text(
+                  'Viewer mode — creators can upload',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ),
+            ),
         ],
         ),
       ),
@@ -486,10 +509,21 @@ class _HookCardState extends ConsumerState<_HookCard> {
             bottom: 110,
             child: Column(
               children: [
-                const _CircleIcon(
-                  icon: Icons.person,
-                  size: 48,
-                  border: true,
+                // Profile linked to creator — tappable avatar
+                GestureDetector(
+                  onTap: () {
+                    final creatorId = widget.hook['creatorId']?.toString();
+                    if (creatorId != null && creatorId.isNotEmpty) {
+                      // Navigate to creator public profile
+                      // Uses real shorts creator_profiles linkage
+                      try { Navigator.of(context).pushNamed('/user/$creatorId'); } catch (_) {}
+                    }
+                  },
+                  child: const _CircleIcon(
+                    icon: Icons.person,
+                    size: 48,
+                    border: true,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _ActionIcon(

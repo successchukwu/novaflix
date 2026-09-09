@@ -74,15 +74,20 @@ class NotificationSettings {
   final bool watchlistUpdates;
   final bool creatorActivity;
   final bool marketing;
+  final bool pushEnabled;
+  final bool commentReply;
+  final bool sound;
 
   const NotificationSettings({
     this.newReleases = true, this.watchlistUpdates = true,
     this.creatorActivity = true, this.marketing = false,
+    this.pushEnabled = true, this.commentReply = true, this.sound = true,
   });
 
   Map<String, dynamic> toJson() => {
     'newReleases': newReleases, 'watchlistUpdates': watchlistUpdates,
     'creatorActivity': creatorActivity, 'marketing': marketing,
+    'pushEnabled': pushEnabled, 'commentReply': commentReply, 'sound': sound,
   };
 
   factory NotificationSettings.fromJson(Map<String, dynamic> json) => NotificationSettings(
@@ -90,14 +95,20 @@ class NotificationSettings {
     watchlistUpdates: json['watchlistUpdates'] as bool? ?? true,
     creatorActivity: json['creatorActivity'] as bool? ?? true,
     marketing: json['marketing'] as bool? ?? false,
+    pushEnabled: json['pushEnabled'] as bool? ?? true,
+    commentReply: json['commentReply'] as bool? ?? true,
+    sound: json['sound'] as bool? ?? true,
   );
 
-  NotificationSettings copyWith({bool? newReleases, bool? watchlistUpdates, bool? creatorActivity, bool? marketing}) =>
+  NotificationSettings copyWith({bool? newReleases, bool? watchlistUpdates, bool? creatorActivity, bool? marketing, bool? pushEnabled, bool? commentReply, bool? sound}) =>
       NotificationSettings(
         newReleases: newReleases ?? this.newReleases,
         watchlistUpdates: watchlistUpdates ?? this.watchlistUpdates,
         creatorActivity: creatorActivity ?? this.creatorActivity,
         marketing: marketing ?? this.marketing,
+        pushEnabled: pushEnabled ?? this.pushEnabled,
+        commentReply: commentReply ?? this.commentReply,
+        sound: sound ?? this.sound,
       );
 }
 

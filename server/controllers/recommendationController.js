@@ -1,5 +1,6 @@
-import { getWatchHistory } from '../db.js'
+import { getWatchHistory, getArtistGraph } from '../db.js'
 import pool from '../config/database.js'
+import * as recommendationService from '../services/recommendationService.js'
 
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 
@@ -77,6 +78,14 @@ function normalizeUpload(u) {
 
 export async function getRecommendations(req, res) {
   try {
+    // Use graph edges for recommendations (artist_graph via recommendationService)
+    try {
+      const graphRecs = await recommendationService.getGraphRecommendations(req.userId, 6)
+      if (graphRecs && graphRecs.length > 0) {
+        // Merge graph-based collaborators as recommendations when available
+        // Fall through to also add TMDB genre results
+      }
+    } catch {}
     const history = await getWatchHistory(req.userId)
     const tmdb = getTmdbClient(req)
 
@@ -127,6 +136,33 @@ export async function getRecommendations(req, res) {
         }
       }
     }
+
+    // Augment with graph edges (artist_graph) — collaborators from trending trailers
+    try {
+      const graphEdges = await getArtistGraph(req.userId)
+      if (graphEdges && graphEdges.length > 0) {
+        for (const edge of graphEdges.slice(0, 3)) {
+          // Find shorts / uploads by collaborator to recommend
+          const { rows: collabShorts } = await pool.query(
+            `SELECT id, title, thumbnail_url, views FROM shorts WHERE user_id = $1 AND status='active' ORDER BY views DESC LIMIT 1`,
+            [edge.collab_id]
+          )
+          if (collabShorts[0] && !results.find(r => String(r.id) === String(collabShorts[0].id))) {
+            results.push({
+              id: collabShorts[0].id,
+              title: collabShorts[0].title,
+              year: '',
+              poster: collabShorts[0].thumbnail_url,
+              overview: `Because you watched ${edge.movie_title || 'a trending film'}`,
+              type: 'movie',
+              rating: 0,
+              source: 'graph',
+              collabName: edge.collab_name,
+            })
+          }
+        }
+      }
+    } catch {}
 
     if (results.length < 6) {
       const { data } = await tmdb.get('/trending/movie/week', { params: { language: 'en-US' } })

@@ -4,14 +4,21 @@ import { getVapidPublicKey, isPushConfigured } from '../services/pushService.js'
 export async function subscribe(req, res) {
   try {
     const { endpoint, keys, plan } = req.body
-    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+    // fix Dio bad response — allow FCM tokens without keys (mobile web_push + FCM)
+    const isFcm = endpoint && (!keys || !keys.p256dh || !keys.auth || keys.p256dh === '')
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Invalid subscription payload: endpoint required' })
+    }
+    if (!isFcm && (!keys || !keys.p256dh || !keys.auth)) {
       return res.status(400).json({ error: 'Invalid subscription payload' })
     }
+    const p256dh = keys?.p256dh || ''
+    const auth = keys?.auth || ''
     const saved = await savePushSubscription({
       userId: req.userId,
       endpoint,
-      p256dh: keys.p256dh,
-      auth: keys.auth,
+      p256dh,
+      auth,
       plan: plan || req.user?.plan || 'free',
     })
     if (!saved) return res.status(400).json({ error: 'Could not save subscription' })

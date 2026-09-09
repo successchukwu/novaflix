@@ -19,6 +19,8 @@ class AppShell extends ConsumerWidget {
     final isAuthenticated = auth.status == AuthStatus.authenticated;
     final isCreator = user?.role == 'creator' || user?.role == 'admin';
     final isAdmin = user?.role == 'admin';
+    // fix isPremium check — parity with web: plan !== 'free'; hide download menu if free
+    final isPremium = user != null && (user.plan != null && user.plan != 'free' && (user.planFeatures['downloadDevices'] as int? ?? 0) > 0);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -28,6 +30,7 @@ class AppShell extends ConsumerWidget {
             child: child,
             isAuthenticated: isAuthenticated,
             isCreator: isCreator,
+            isPremium: isPremium,
             avatar: user?.avatar,
           );
         }
@@ -36,6 +39,7 @@ class AppShell extends ConsumerWidget {
           isAuthenticated: isAuthenticated,
           isCreator: isCreator,
           isAdmin: isAdmin,
+          isPremium: isPremium,
           avatar: user?.avatar,
           userName: user?.username,
           userEmail: user?.email,
@@ -318,6 +322,7 @@ class _MobileLayout extends StatelessWidget {
   final bool isAuthenticated;
   final bool isCreator;
   final bool isAdmin;
+  final bool isPremium;
   final String? avatar;
   final String? userName;
   final String? userEmail;
@@ -327,6 +332,7 @@ class _MobileLayout extends StatelessWidget {
     required this.isAuthenticated,
     required this.isCreator,
     this.isAdmin = false,
+    this.isPremium = false,
     this.avatar,
     this.userName,
     this.userEmail,
@@ -348,6 +354,7 @@ class _MobileLayout extends StatelessWidget {
         isAuthenticated: isAuthenticated,
         isCreator: isCreator,
         isAdmin: isAdmin,
+        isPremium: isPremium,
         avatar: avatar,
         userName: userName,
         userEmail: userEmail,
@@ -420,6 +427,7 @@ class _MobileDrawer extends StatelessWidget {
   final String? avatar;
   final String? userName;
   final String? userEmail;
+  final bool isPremium;
 
   const _MobileDrawer({
     required this.isAuthenticated,
@@ -428,6 +436,7 @@ class _MobileDrawer extends StatelessWidget {
     this.avatar,
     this.userName,
     this.userEmail,
+    this.isPremium = false,
   });
 
   @override
@@ -505,9 +514,14 @@ class _MobileDrawer extends StatelessWidget {
       );
     }
 
-    List<_DrawerNavItem> visibleItems(List<_DrawerNavItem> items) => items
-        .where((i) => (!i.authenticated || isAuthenticated) && (!i.creatorOnly || isCreator) && (!i.adminOnly || isAdmin))
-        .toList();
+    List<_DrawerNavItem> visibleItems(List<_DrawerNavItem> items) => items.where((i) {
+      if (i.authenticated && !isAuthenticated) return false;
+      if (i.creatorOnly && !isCreator) return false;
+      if (i.adminOnly && !isAdmin) return false;
+      // sidebar download visibility — hide download menu if free
+      if (i.route == '/downloads' && !isPremium) return false;
+      return true;
+    }).toList();
 
     return Drawer(
       width: drawerWidth,
@@ -685,12 +699,16 @@ IconData _drawerIcon(String name) {
 class _DesktopSidebar extends StatelessWidget {
   final bool isAuthenticated;
   final bool isCreator;
+  final bool isPremium;
 
-  const _DesktopSidebar({required this.isAuthenticated, required this.isCreator});
+  const _DesktopSidebar({required this.isAuthenticated, required this.isCreator, this.isPremium = false});
 
-  List<_SidebarItem> _visible(List<_SidebarItem> items) => items
-      .where((i) => (!i.authenticated || isAuthenticated) && (!i.creatorOnly || isCreator))
-      .toList();
+  List<_SidebarItem> _visible(List<_SidebarItem> items) => items.where((i) {
+        if (i.authenticated && !isAuthenticated) return false;
+        if (i.creatorOnly && !isCreator) return false;
+        if (i.route == '/downloads' && !isPremium) return false;
+        return true;
+      }).toList();
 
   @override
   Widget build(BuildContext context) {
