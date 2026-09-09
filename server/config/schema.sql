@@ -369,7 +369,7 @@ CREATE TABLE IF NOT EXISTS ad_placements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id UUID REFERENCES ad_campaigns(id) ON DELETE CASCADE,
   content_id VARCHAR(255),
-  position_type VARCHAR(30) NOT NULL CHECK (position_type IN ('pre_roll', 'mid_roll', 'post_roll', 'pause', 'binge_pass', 'promoted', 'banner')),
+  position_type VARCHAR(30) NOT NULL CHECK (position_type IN ('pause', 'mid_roll', 'binge_pass')),
   cue_time_seconds INT DEFAULT 0,
   duration_seconds INT DEFAULT 15,
   skip_after_seconds INT DEFAULT 0,

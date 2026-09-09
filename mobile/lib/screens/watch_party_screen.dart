@@ -139,7 +139,7 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
 
   void _copyLink() {
     if (_roomCode == null) return;
-    final link = 'http://localhost:3030/watch-party?room=$_roomCode';
+    final link = '${AppConfig.apiBaseUrl.replaceFirst('/api', '')}/watch-party?room=$_roomCode';
     Clipboard.setData(ClipboardData(text: link));
     _toast('Invite link copied!');
   }

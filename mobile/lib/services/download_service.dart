@@ -541,6 +541,19 @@ class DownloadService {
 
   List<ActiveDownload> get activeDownloads => List.unmodifiable(_active);
 
+  Future<int> getTotalDownloadedBytes() async {
+    final root = await _root();
+    int total = 0;
+    try {
+      await for (final entity in root.list(recursive: true)) {
+        if (entity is File && entity.path.endsWith('.nfv')) {
+          total += await entity.length();
+        }
+      }
+    } catch (_) {}
+    return total;
+  }
+
   static const _storage = FlutterSecureStorage();
   Future<Uint8List> _deriveKey() async {
     // Persist key so OS updates don't invalidate existing .nfv files
