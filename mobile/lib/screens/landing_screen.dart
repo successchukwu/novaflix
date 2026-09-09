@@ -357,7 +357,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
     ];
     return Container(
       padding: EdgeInsets.fromLTRB(hPadding, 48, hPadding, 64),
-      color: AppColors.surfaceVariant.withValues(alpha: 0.2),
+      color: AppColors.pricingBg,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1152),
@@ -395,13 +395,21 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                     return Container(
                       padding: const EdgeInsets.all(28),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(16),
+                      color: p.$5 ? AppColors.pricingCardHover : AppColors.pricingCard,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: p.$5
-                            ? AppColors.primaryContainer.withValues(alpha: 0.6)
-                            : AppColors.white.withValues(alpha: 0.05),
+                            ? AppColors.pricingRed.withValues(alpha: 0.6)
+                            : AppColors.pricingBorder,
                       ),
+                      boxShadow: p.$5
+                          ? [
+                              BoxShadow(
+                                color: AppColors.pricingRed.withValues(alpha: 0.08),
+                                blurRadius: 24,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,7 +431,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryContainer,
+                                  color: AppColors.pricingRed,
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(

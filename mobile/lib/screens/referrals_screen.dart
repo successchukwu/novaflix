@@ -362,12 +362,8 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
   }
 
   Widget _statsRow() {
-    final total = (_stats['total'] as num?)?.toString() ??
-        _stats['total']?.toString() ??
-        '0';
-    final converted = (_stats['converted'] as num?)?.toString() ??
-        _stats['converted']?.toString() ??
-        '0';
+    final total = _stats['total'] is num ? (_stats['total'] as num).toString() : _stats['total']?.toString() ?? '0';
+    final converted = _stats['converted'] is num ? (_stats['converted'] as num).toString() : _stats['converted']?.toString() ?? '0';
     final raw = _stats['total_commission'];
     final commission = _num(raw);
     return Row(

@@ -842,24 +842,29 @@ class _PlanCard extends StatelessWidget {
         .toList();
     final isPopular = slug == 'standard';
 
-    // plan selection UI card contain no overlay — pure Container + Column, no Stack overlay blocking taps
+    // pricing reference — pricingBg #111, pricingCard #202020, pricingRed #ff0718
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: selected
-            ? AppColors.surfaceContainerHigh
-            : AppColors.surfaceContainer,
+            ? AppColors.pricingCardHover
+            : AppColors.pricingCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: selected
-              ? AppColors.primaryContainer.withValues(alpha: 0.5)
-              : AppColors.outlineVariant.withValues(alpha: 0.3),
+          color: selected || isPopular
+              ? AppColors.pricingRed.withValues(alpha: 0.5)
+              : AppColors.pricingBorder,
         ),
-        boxShadow: selected
+        boxShadow: (selected || isPopular)
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: AppColors.pricingRed.withValues(alpha: 0.08),
                   blurRadius: 24,
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ]
             : null,
@@ -877,15 +882,19 @@ class _PlanCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryContainer,
-                    borderRadius: BorderRadius.circular(999),
+                    color: AppColors.pricingRed,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(8),
+                      bottomRight: Radius.circular(8),
+                    ),
                   ),
                   child: Text(
                     'Most Popular',
                     style: AppTypography.labelSm.copyWith(
-                      color: AppColors.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
+                      color: AppColors.pricingWhite,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.5,
+                      fontSize: 9,
                     ),
                   ),
                 )
@@ -896,14 +905,15 @@ class _PlanCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.secondary,
+                    color: AppColors.pricingGreen,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     'Current',
                     style: AppTypography.labelSm.copyWith(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF07190D),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 9,
                     ),
                   ),
                 )
@@ -915,14 +925,15 @@ class _PlanCard extends StatelessWidget {
           Text(
             name,
             textAlign: TextAlign.center,
-            style: AppTypography.headlineMd.copyWith(color: AppColors.onSurface),
+            style: AppTypography.headlineMd.copyWith(color: AppColors.pricingWhite, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 2),
           Text(
             description,
             textAlign: TextAlign.center,
             style: AppTypography.labelSm.copyWith(
-              color: AppColors.onSurfaceVariant,
+              color: const Color(0xFF9D9D9D),
+              fontSize: 10,
             ),
           ),
           const SizedBox(height: 12),
@@ -934,13 +945,17 @@ class _PlanCard extends StatelessWidget {
               Text(
                 CurrencyService.format(price),
                 style: AppTypography.headlineLg.copyWith(
-                  color: AppColors.onSurface,
+                  color: AppColors.pricingWhite,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
                 ),
               ),
               Text(
                 '/month',
                 style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.onSurfaceVariant,
+                  color: const Color(0xFF888888),
+                  fontSize: 10,
                 ),
               ),
             ],
@@ -955,18 +970,27 @@ class _PlanCard extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.check_circle,
-                          size: 18,
-                          color: AppColors.primaryContainer,
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.pricingRedLight, width: 1),
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            size: 10,
+                            color: AppColors.pricingRedLight,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             f,
                             style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onSurface,
-                              fontSize: 13,
+                              color: const Color(0xFFC8C8C8),
+                              fontSize: 11,
+                              height: 1.45,
                             ),
                           ),
                         ),
@@ -978,21 +1002,26 @@ class _PlanCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 48,
+            height: 44,
             child: FilledButton(
               onPressed: isActive ? null : onSubscribe,
               style: FilledButton.styleFrom(
-                backgroundColor: selected
-                    ? AppColors.primaryContainer
-                    : AppColors.transparent,
-                foregroundColor: selected
-                    ? AppColors.onPrimaryContainer
-                    : AppColors.primaryContainer,
-                side: selected
-                    ? null
-                    : BorderSide(color: AppColors.primaryContainer),
+                backgroundColor: isActive
+                    ? Colors.transparent
+                    : selected || isPopular
+                        ? AppColors.pricingRed
+                        : Colors.transparent,
+                foregroundColor: isActive
+                    ? const Color(0xFF777777)
+                    : AppColors.pricingWhite,
+                side: BorderSide(
+                  color: isActive
+                      ? const Color(0xFF444444)
+                      : AppColors.pricingRed,
+                  width: 1,
+                ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
               child: Text(
@@ -1001,6 +1030,7 @@ class _PlanCard extends StatelessWidget {
                     : 'Subscribe — ${CurrencyService.format(price)}',
                 style: AppTypography.labelMd.copyWith(
                   fontWeight: FontWeight.w700,
+                  fontSize: 10,
                 ),
               ),
             ),

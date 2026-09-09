@@ -830,12 +830,14 @@ class _DesktopLayout extends StatelessWidget {
   final Widget child;
   final bool isAuthenticated;
   final bool isCreator;
+  final bool isPremium;
   final String? avatar;
 
   const _DesktopLayout({
     required this.child,
     required this.isAuthenticated,
     required this.isCreator,
+    this.isPremium = false,
     this.avatar,
   });
 

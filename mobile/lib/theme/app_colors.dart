@@ -46,4 +46,16 @@ class AppColors {
   static const Color black = Color(0xFF000000);
   static const Color transparent = Color(0x00000000);
   static const Color divider = Color(0x14FFFFFF);
+  // Pricing reference tokens (scoped, mirrored from tailwind pricing-* )
+  static const Color pricingBg = Color(0xFF111111);
+  static const Color pricingCard = Color(0xFF202020);
+  static const Color pricingCardHover = Color(0xFF272727);
+  static const Color pricingBorder = Color(0xFF363636);
+  static const Color pricingRed = Color(0xFFFF0718);
+  static const Color pricingRedLight = Color(0xFFFF3342);
+  static const Color pricingRedDark = Color(0xFFC9000E);
+  static const Color pricingWhite = Color(0xFFFFFFFF);
+  static const Color pricingText = Color(0xFFEEEEEE);
+  static const Color pricingMuted = Color(0xFF999999);
+  static const Color pricingGreen = Color(0xFF23D96B);
 }
