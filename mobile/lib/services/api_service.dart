@@ -195,6 +195,8 @@ class ApiService {
       get('/search/person', params: {'query': query});
   Future<Response> searchCreators(String query) =>
       get('/creator/search', params: {'q': query});
+  Future<Response> getCreatorByTmdbId(int tmdbId) =>
+      get('/creator/by-tmdb/$tmdbId');
   Future<Response> searchCategories(String query) =>
       get('/categories/search', params: {'q': query});
   Future<Response> getPersonCredits(int id) =>

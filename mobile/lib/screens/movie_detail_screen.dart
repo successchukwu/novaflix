@@ -94,6 +94,27 @@ final _creditsProvider = FutureProvider.family<List<CastMember>, int>((
   }
 });
 
+final _linkedIdsProvider = FutureProvider.family<Set<int>, List<int>>((ref, ids) async {
+  if (ids.isEmpty) return {};
+  final api = ref.read(apiServiceProvider);
+  try {
+    final res = await api.get('/creator/batch-check', params: {'tmdbIds': ids.join(',')});
+    final linked = res.data['linked'] as List? ?? [];
+    return linked.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toSet();
+  } catch (_) {
+    return {};
+  }
+});
+
+final _creatorByTmdbProvider = FutureProvider.family<Map<String, dynamic>?, int>((ref, tmdbId) async {
+  final api = ref.read(apiServiceProvider);
+  try {
+    final res = await api.getCreatorByTmdbId(tmdbId);
+    if (res.data['success'] == true) return res.data['creator'] as Map<String, dynamic>?;
+  } catch (_) {}
+  return null;
+});
+
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
   final String? mediaType;
@@ -536,6 +557,8 @@ class MovieDetailScreen extends ConsumerWidget {
                           const SizedBox(height: 32),
                           _infoCard(context, item, credits.valueOrNull ?? const [], isTV),
                           const SizedBox(height: 24),
+                          _creatorSection(context, ref, item, credits.valueOrNull ?? const []),
+                          const SizedBox(height: 24),
                           _engagementSection(context, item),
                           const SizedBox(height: 24),
                           if (isTV && item.seasons != null && item.seasons!.isNotEmpty) ...[
@@ -744,6 +767,122 @@ class MovieDetailScreen extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _creatorSection(BuildContext context, WidgetRef ref, MediaItem item, List<CastMember> credits) {
+    if (credits.isEmpty) return const SizedBox.shrink();
+    final ids = credits.take(5).map((c) => c.id).whereType<int>().toList();
+    if (ids.isEmpty) return const SizedBox.shrink();
+    return Consumer(
+      builder: (ctx, ref2, __) {
+        final linkedAsync = ref2.watch(_linkedIdsProvider(ids));
+        return linkedAsync.when(
+          loading: () => const SizedBox(height: 80, child: LoadingSpinner()),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (linked) {
+            if (linked.isNotEmpty) {
+              final tmdbId = linked.first;
+              final creatorAsync = ref2.watch(_creatorByTmdbProvider(tmdbId));
+              return creatorAsync.when(
+                loading: () => const SizedBox(height: 80, child: LoadingSpinner()),
+                error: (_, __) => _claimCard(context, ids.first, item),
+                data: (creator) {
+                  if (creator == null) return _claimCard(context, ids.first, item);
+                  final userId = creator['user_id'] as String? ?? creator['userId'] as String? ?? '';
+                  final name = creator['display_name'] as String? ?? creator['name'] as String? ?? 'Creator';
+                  final bio = creator['bio'] as String? ?? '';
+                  final avatar = creator['avatar'] as String?;
+                  return Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(color: AppColors.surfaceContainer, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(radius: 28, backgroundImage: avatar != null ? NetworkImage(avatar) : null, child: avatar == null ? const Icon(Icons.person) : null),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: AppTypography.headlineMd.copyWith(color: Colors.white)), if (bio.isNotEmpty) Text(bio, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12))])),
+                            const SizedBox(width: 12),
+                            FilledButton(onPressed: () => context.push('/user/$userId'), style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer), child: const Text('View Profile')),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.favorite_border, size: 16), label: const Text('Tip Creator'), onPressed: () {
+                              final auth = ref2.read(authProvider);
+                              if (auth.status != AuthStatus.authenticated) {
+                                context.go('/login?redirect=/movie/${item.id}');
+                                return;
+                              }
+                              // Trigger tip flow — navigate to creator profile where tip is available, or show snackbar
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tip $name — visit profile to send tip'), duration: const Duration(seconds: 2)));
+                              context.push('/user/$userId');
+                            }, style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: BorderSide(color: AppColors.primary.withValues(alpha: 0.3))))),
+                            const SizedBox(width: 12),
+                            OutlinedButton(onPressed: () => context.push('/user/$userId'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white70, side: const BorderSide(color: Colors.white10)), child: const Text('Follow')),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            } else {
+              return _claimCard(context, ids.first, item);
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _claimCard(BuildContext context, int tmdbId, MediaItem item) {
+    return Consumer(
+      builder: (ctx, ref2, __) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: AppColors.surfaceContainer, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('No creator claimed this film yet', style: AppTypography.headlineMd),
+              const SizedBox(height: 8),
+              Text('Be the first to claim ${item.title} as your work and enable tipping, analytics, and fan growth.', style: AppTypography.bodyMd.copyWith(color: Colors.white70)),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                icon: const Icon(Icons.verified_outlined, size: 18),
+                label: const Text('Claim this creator'),
+                onPressed: () {
+                  final auth = ref2.read(authProvider);
+                  if (auth.status != AuthStatus.authenticated) {
+                    ctx.go('/login?redirect=/movie/${item.id}');
+                    return;
+                  }
+                  ctx.push('/creator/claim/start?tmdbId=$tmdbId');
+                },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.favorite_border, size: 16),
+                label: const Text('Tip Creator'),
+                onPressed: () {
+                  final auth = ref2.read(authProvider);
+                  if (auth.status != AuthStatus.authenticated) {
+                    ctx.go('/login?redirect=/movie/${item.id}');
+                    return;
+                  }
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please claim to enable tipping — login registered, now claim to tip')));
+                },
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.white54, side: const BorderSide(color: Colors.white10)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

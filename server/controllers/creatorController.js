@@ -220,3 +220,26 @@ export async function searchCreators(req, res) {
     res.status(500).json({ error: err.message })
   }
 }
+
+export async function getCreatorByTmdbId(req, res) {
+  try {
+    const tmdbId = parseInt(req.params.tmdbId, 10);
+    if (!tmdbId || isNaN(tmdbId)) return res.status(400).json({ error: 'tmdbId required' });
+    const { rows } = await pool.query(
+      `SELECT u.id as user_id, u.name, u.avatar, u.bio, cp.tmdb_person_id, cp.display_name, cp.known_for_department,
+              (SELECT COUNT(*)::int FROM uploads WHERE user_id = u.id AND status='active') as film_count,
+              (SELECT COALESCE(SUM(views),0)::bigint FROM uploads WHERE user_id = u.id AND status='active') as total_views,
+              (SELECT COUNT(*)::int FROM followers WHERE following_id = u.id) as followers_count
+       FROM creator_profiles cp
+       JOIN users u ON u.id = cp.user_id
+       WHERE cp.tmdb_person_id = $1
+       LIMIT 1`,
+      [tmdbId]
+    );
+    if (rows.length === 0) return res.json({ success: false, error: 'Creator not found for tmdbId' });
+    res.json({ success: true, creator: rows[0] });
+  } catch (err) {
+    console.error('[creator] by-tmdb failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+}

@@ -15,6 +15,7 @@ const router = Router()
 // Public routes — no auth required
 router.get('/public', creatorController.getPublicCreators)
 router.get('/search', creatorController.searchCreators)
+router.get('/by-tmdb/:tmdbId', creatorController.getCreatorByTmdbId)
 
 // Creator-only routes — require auth + creator role
 router.post('/upload', authMiddleware, requireCreator, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), creatorController.addUploadHandler)
