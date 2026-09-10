@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,16 +44,18 @@ class CastMember {
   );
 }
 
-final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((
+final _movieDetailProvider = FutureProvider.family<MediaItem?, (int, String)>((
   ref,
-  id,
+  key,
 ) async {
+  final (id, type) = key;
   final api = ref.read(apiServiceProvider);
   try {
-    final res = await api.getDetails(id, 'movie');
+    final res = await api.getDetails(id, type);
     final data =
         res.data['data'] as Map<String, dynamic>? ??
         res.data as Map<String, dynamic>;
+    if (data['success'] == false) return null;
     return MediaItem.fromJson(data);
   } catch (_) {
     return null;
@@ -76,13 +79,14 @@ final _similarProvider = FutureProvider.family<List<MediaItem>, (int, String)>((
   }
 });
 
-final _creditsProvider = FutureProvider.family<List<CastMember>, int>((
+final _creditsProvider = FutureProvider.family<List<CastMember>, (int, String)>((
   ref,
-  id,
+  key,
 ) async {
+  final (id, type) = key;
   final api = ref.read(apiServiceProvider);
   try {
-    final res = await api.getCredits(id, 'movie');
+    final res = await api.getCredits(id, type);
     final cast = res.data['cast'] as List? ?? [];
     final crew = res.data['crew'] as List? ?? [];
     return [
@@ -115,18 +119,25 @@ final _creatorByTmdbProvider = FutureProvider.family<Map<String, dynamic>?, int>
   return null;
 });
 
-class MovieDetailScreen extends ConsumerWidget {
+class MovieDetailScreen extends ConsumerStatefulWidget {
   final int movieId;
   final String? mediaType;
 
   const MovieDetailScreen({super.key, required this.movieId, this.mediaType});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final type = mediaType ?? 'movie';
-    final detail = ref.watch(_movieDetailProvider(movieId));
-    final similar = ref.watch(_similarProvider((movieId, type)));
-    final credits = ref.watch(_creditsProvider(movieId));
+  ConsumerState<MovieDetailScreen> createState() => _MovieDetailScreenState();
+}
+
+class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
+  bool _showTrailer = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = widget.mediaType ?? 'movie';
+    final detail = ref.watch(_movieDetailProvider((widget.movieId, type)));
+    final similar = ref.watch(_similarProvider((widget.movieId, type)));
+    final credits = ref.watch(_creditsProvider((widget.movieId, type)));
     final auth = ref.watch(authProvider);
 
     return Scaffold(
@@ -139,12 +150,26 @@ class MovieDetailScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.error_outline, size: 48, color: AppColors.error),
               const SizedBox(height: 16),
-              Text('Failed to load details', style: AppTypography.bodyMd),
+              Text('Failed to load details: $err', style: AppTypography.bodyMd, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              AppButton(
-                label: 'Go Back',
-                onPressed: () => context.pop(),
-                fullWidth: false,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppButton(
+                    label: 'Retry',
+                    onPressed: () {
+                      ref.invalidate(_movieDetailProvider((widget.movieId, type)));
+                      ref.invalidate(_creditsProvider((widget.movieId, type)));
+                    },
+                    fullWidth: false,
+                  ),
+                  const SizedBox(width: 12),
+                  AppButton(
+                    label: 'Go Back',
+                    onPressed: () => context.pop(),
+                    fullWidth: false,
+                  ),
+                ],
               ),
             ],
           ),
@@ -162,7 +187,9 @@ class MovieDetailScreen extends ConsumerWidget {
               : null;
           final hPadding = responsivePadding(width);
 
-          return CustomScrollView(
+          return Stack(
+            children: [
+              CustomScrollView(
             slivers: [
               SliverAppBar(
                 expandedHeight: heroHeight,
@@ -378,11 +405,11 @@ class MovieDetailScreen extends ConsumerWidget {
                                     filled: true,
                                     onTap: () {
                                       if (auth.status != AuthStatus.authenticated) {
-                                        context.go('/login?redirect=/movie/$movieId');
+                                        context.go('/login?redirect=/movie/${widget.movieId}');
                                         return;
                                       }
                                       context.push(
-                                        '/watch?id=$movieId&type=$type${isTV ? '&season=1&episode=1' : ''}',
+                                        '/watch?id=${widget.movieId}&type=$type${isTV ? '&season=1&episode=1' : ''}',
                                       );
                                     },
                                   ),
@@ -419,7 +446,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                         filled: false,
                                         onTap: () async {
                                           if (auth.status != AuthStatus.authenticated) {
-                                            context.go('/login?redirect=/movie/$movieId');
+                                            context.go('/login?redirect=/movie/${widget.movieId}');
                                             return;
                                           }
                                           try {
@@ -486,7 +513,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                           ),
                                           onPressed: () {
                                             if (auth.status != AuthStatus.authenticated) {
-                                              context.go('/login?redirect=/movie/$movieId');
+                                              context.go('/login?redirect=/movie/${widget.movieId}');
                                               return;
                                             }
                                             ref2
@@ -502,9 +529,11 @@ class MovieDetailScreen extends ConsumerWidget {
                                     icon: Icons.diversity_3,
                                     filled: false,
                                     outline: true,
-                                    onTap: () => context.push(
-                                      '/watch-party?id=$movieId&type=$type',
-                                    ),
+                                    onTap: () {
+                                      final code = math.Random().nextInt(1 << 30).toRadixString(36).padLeft(6, '0').toUpperCase().substring(0, 6);
+                                      final seasonEp = isTV && item.seasons != null && item.seasons!.isNotEmpty ? '&season=1&episode=1' : '';
+                                      context.push('/watch-party?room=$code&id=${widget.movieId}&type=$type$seasonEp');
+                                    },
                                   ),
                                   if (item.trailerKey != null &&
                                       item.trailerKey!.isNotEmpty)
@@ -579,7 +608,8 @@ class MovieDetailScreen extends ConsumerWidget {
                             data: (items) => items.isNotEmpty
                                 ? ContentRow(
                                     title: 'More Like This',
-                                    items: items,
+                                    items: items.take(12).toList(),
+                                    onSeeAll: () => context.go('/discover?similar_to=${widget.movieId}&type=$type'),
                                   )
                                 : const SizedBox.shrink(),
                             loading: () => const SizedBox(
@@ -595,6 +625,38 @@ class MovieDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+              if (_showTrailer && item.trailerKey != null)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _showTrailer = false),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.9),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: Container(
+                                margin: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12)),
+                                clipBehavior: Clip.antiAlias,
+                                child: Stack(
+                                  children: [
+                                    CachedNetworkImage(imageUrl: 'https://img.youtube.com/vi/${item.trailerKey}/maxresdefault.jpg', fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorWidget: (_, __, ___) => Container(color: Colors.black26)),
+                                    Center(child: IconButton(icon: const Icon(Icons.close, color: Colors.white), style: IconButton.styleFrom(backgroundColor: Colors.black45), onPressed: () => setState(() => _showTrailer = false))),
+                                    Center(child: IconButton(icon: const Icon(Icons.play_arrow, color: Colors.white, size: 48), onPressed: () async { final uri = Uri.parse('https://www.youtube.com/watch?v=${item.trailerKey}'); if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication); })),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
@@ -602,10 +664,7 @@ class MovieDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _openTrailer(String key) async {
-    final uri = Uri.parse('https://www.youtube.com/watch?v=$key');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    setState(() => _showTrailer = true);
   }
 
   Widget _heroButton({
