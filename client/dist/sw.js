@@ -1,4 +1,4 @@
-const CACHE = 'novaflix-v2'
+const CACHE = 'novaflix-v3'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

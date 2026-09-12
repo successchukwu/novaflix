@@ -116,14 +116,16 @@ export async function initialize(req, res) {
       metadata: { gateway: selectedGateway, promoCode: promo?.code, originalAmount, discount, discountedAmount: amount },
     })
 
+    const paymentPlan = planRow?.flutterwave_plan_id || planRow?.flutterwave_plan_id_test || req.body.paymentPlan;
     const result = await initializePayment({
       gateway: selectedGateway,
       email: req.user.email,
       amount,
       reference,
       callbackUrl: `${process.env.APP_URL || 'http://localhost:3000'}/payment/success?reference=${reference}&plan=${plan}`,
-      metadata: { userId: req.userId, plan },
+      metadata: { userId: req.userId, plan, paymentPlan },
       currency: await getDefaultCurrency(),
+      paymentPlan,
     })
 
     if (!result.success) return res.status(500).json({ error: result.error })

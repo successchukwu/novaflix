@@ -1132,6 +1132,15 @@ INSERT INTO plans (slug, name, price, currency, features, sort_order) VALUES
   ('premium', 'Premium', 5500, 'NGN', '["4K Ultra HD + Dolby Vision & HDR10","Spatial Audio support","All devices supported","4 screens simultaneously","Offline downloads (6 devices)","Completely ad-free","Unlimited skips","Premier access: indie theatrical drops, ticketed masterclasses, virtual red carpet lobbies"]', 4)
 ON CONFLICT (slug) DO NOTHING;
 
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS flutterwave_plan_id VARCHAR(50);
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS flutterwave_plan_id_test VARCHAR(50);
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS interval VARCHAR(20) DEFAULT 'monthly';
+-- Backfill placeholders — replace with real Dashboard IDs (amounts must match price)
+UPDATE plans SET flutterwave_plan_id = '107086' WHERE slug = 'student' AND flutterwave_plan_id IS NULL;
+UPDATE plans SET flutterwave_plan_id = '107087' WHERE slug = 'basic' AND flutterwave_plan_id IS NULL;
+UPDATE plans SET flutterwave_plan_id = '107088' WHERE slug = 'standard' AND flutterwave_plan_id IS NULL;
+UPDATE plans SET flutterwave_plan_id = '107089' WHERE slug = 'premium' AND flutterwave_plan_id IS NULL;
+
 -- ======================================================================
 -- DISCOVERY ENGINE (Spotify-style search & creator profiles)
 -- Creator <-> Movie many-to-many with explicit per-project role.

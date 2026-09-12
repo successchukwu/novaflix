@@ -5,6 +5,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/currency_service.dart';
+import '../models/subscription_plan.dart';
+import '../services/subscription_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
@@ -457,6 +459,17 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                       onPressed: !canPay || busy || gatewayNotConfigured
                           ? null
                           : () async {
+                              // For Flutterwave, use new in-app Charge API with card tokenization + paymentPlan
+                              if (gateway == 'flutterwave') {
+                                final slug = plan['slug'].toString();
+                                final subPlan = planForSlug(slug);
+                                if (ctx.mounted) Navigator.of(ctx).pop();
+                                if (context.mounted) {
+                                  await executeInAppSubscription(context, subPlan);
+                                }
+                                return;
+                              }
+                              // Paystack fallback: keep hosted WebView flow
                               setDialog(() => busy = true);
                               try {
                                 final api = ref.read(apiServiceProvider);
@@ -474,7 +487,6 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                                 if (url != null && url.isNotEmpty) {
                                   if (ctx.mounted) Navigator.of(ctx).pop();
                                   if (context.mounted) {
-                                    // WebView for payment with authorization_url and verifyPayment realtime
                                     await Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => _PaymentWebViewScreen(
