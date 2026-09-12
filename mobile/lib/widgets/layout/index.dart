@@ -90,8 +90,8 @@ List<_ShellItem> _userBottomItems() {
         (p) => p.startsWith('/search')),
     _ShellItem('Discover', Icons.explore_outlined, Icons.explore, '/discover',
         (p) => p.startsWith('/discover')),
-    _ShellItem('Categories', Icons.category_outlined, Icons.category, '/category',
-        (p) => p.startsWith('/category')),
+    _ShellItem('Trivia', Icons.quiz_outlined, Icons.quiz, '/trivia',
+        (p) => p.startsWith('/trivia')),
     _ShellItem('Profile', Icons.person_outline, Icons.person, '/profile',
         (p) => p.startsWith('/profile')),
   ];

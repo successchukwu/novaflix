@@ -2323,8 +2323,11 @@ export async function getTriviaStatus(): Promise<any> {
 export async function getGuessStatus(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/guess`, { headers: { Authorization: `Bearer ${token}` } })
-    return res.json()
+    const res = await fetch(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
+    const data = await res.json()
+    // derive guess status without side-effect of creating a new guess question
+    // server guess limit is checked on /trivia/guess fetch; for init we treat not played
+    return { success: data.success, alreadyPlayed: false, dailyLimitReached: false, _triviaStatus: data }
   } catch { return { success: false, alreadyPlayed: false, error: 'Network error' } }
 }
 

@@ -174,8 +174,24 @@ export default function HotTakes() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
+    const pendingJoins: string[] = []
+    const flushJoins = () => {
+      while (pendingJoins.length && ws.readyState === WebSocket.OPEN) {
+        const msg = pendingJoins.shift()!
+        try { ws.send(msg) } catch {}
+      }
+    }
+    const queueJoin = (topicId: string) => {
+      const msg = JSON.stringify({ type: 'topic-join', payload: { topicId } })
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(msg) } catch { pendingJoins.push(msg) }
+      } else {
+        pendingJoins.push(msg)
+      }
+    }
     ws.onopen = () => {
-      if (activeIdRef.current) ws.send(JSON.stringify({ type: 'topic-join', payload: { topicId: activeIdRef.current } }))
+      if (activeIdRef.current) queueJoin(activeIdRef.current)
+      flushJoins()
     }
     ws.onmessage = (ev) => {
       try {
@@ -193,15 +209,22 @@ export default function HotTakes() {
         }
       } catch {}
     }
+    ;(ws as any)._queueJoin = queueJoin
+    ;(ws as any)._flush = flushJoins
     wsRef.current = ws
     return () => { try { ws.close() } catch {} }
   }, [applyStats])
 
   // Switch debate rooms on selection change
   useEffect(() => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN || !activeId) return
-    ws.send(JSON.stringify({ type: 'topic-join', payload: { topicId: activeId } }))
+    const ws: any = wsRef.current
+    if (!ws || !activeId) return
+    const join = ws._queueJoin || ((id: string) => {
+      const msg = JSON.stringify({ type: 'topic-join', payload: { topicId: id } })
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg)
+    })
+    join(activeId)
+    if (ws._flush) ws._flush()
   }, [activeId])
 
   // ---- Actions ----

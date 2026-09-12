@@ -51,6 +51,7 @@ export default function Community() {
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [creating, setCreating] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [community, setCommunity] = useState<Community | null>(null)
@@ -82,12 +83,14 @@ export default function Community() {
 
   // ---- Load community lists ----
   const loadLists = useCallback(async () => {
+    setListError(null)
     const [allRes, mineRes] = await Promise.all([
       getCommunities(),
       getMyCommunities(),
     ])
     if (allRes.success) setCommunities(allRes.communities || [])
     if (mineRes.success) setMyIds(new Set((mineRes.communities || []).map((c: any) => c.id)))
+    if (!allRes.success) setListError(allRes.error || mineRes.error || 'Failed to load communities')
     setLoading(false)
     return allRes.communities || []
   }, [])
@@ -267,6 +270,10 @@ export default function Community() {
   }
 
   const handleCreate = async () => {
+    if (!isCreator) {
+      navigate('/pricing')
+      return
+    }
     if (!newName.trim() || creating) return
     setCreating(true)
     const res = await createCommunity({ name: newName.trim(), description: newDesc.trim() })
@@ -355,6 +362,16 @@ export default function Community() {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="space-y-2 p-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse" />)}</div>
+            ) : listError ? (
+              <div className="p-4 text-center">
+                <p className="text-red-400 text-sm mb-3">Couldn't load communities: {listError}</p>
+                <button
+                  onClick={loadLists}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+                >
+                  <Icon name="refresh" className="w-4 h-4" /> Retry
+                </button>
+              </div>
             ) : visible.length === 0 ? (
               <p className="text-on-surface-variant text-sm text-center py-10 px-4">
                 {q ? 'No communities match your search.' : 'No communities yet.'}
@@ -391,12 +408,20 @@ export default function Community() {
 
           {/* Footer actions */}
           <div className="p-3 border-t border-white/5 space-y-2">
-            {isCreator && (
+            {isCreator ? (
               <button
                 onClick={() => setShowCreate(true)}
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors"
               >
                 <Icon name="add" className="w-4 h-4" /> New Community
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/pricing')}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600/15 border border-red-500/30 text-red-400 font-semibold text-sm hover:bg-red-600/25 hover:text-red-300 transition-colors"
+              >
+                <Icon name="add" className="w-4 h-4" /> New Community
+                <span className="text-[0.68rem] font-medium text-red-500/80 ml-1">Creator plan</span>
               </button>
             )}
             <button

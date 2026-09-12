@@ -227,8 +227,24 @@ export default function Forum() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
+    const pendingJoins: string[] = []
+    const flushJoins = () => {
+      while (pendingJoins.length && ws.readyState === WebSocket.OPEN) {
+        const msg = pendingJoins.shift()!
+        try { ws.send(msg) } catch {}
+      }
+    }
+    const queueJoin = (topicId: string) => {
+      const msg = JSON.stringify({ type: 'topic-join', payload: { topicId } })
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(msg) } catch { pendingJoins.push(msg) }
+      } else {
+        pendingJoins.push(msg)
+      }
+    }
     ws.onopen = () => {
-      if (topicIdRef.current) ws.send(JSON.stringify({ type: 'topic-join', payload: { topicId: topicIdRef.current } }))
+      if (topicIdRef.current) queueJoin(topicIdRef.current)
+      flushJoins()
     }
     ws.onmessage = (event) => {
       try {
@@ -239,19 +255,28 @@ export default function Forum() {
             : [...prev, { ...msg.reply, myVote: msg.reply.myVote ?? 0 }])
           setTopic(t => t && t.id === msg.topicId ? { ...t, reply_count: (t.reply_count || 0) + 1 } : t)
           setTopics(prev => prev.map(x => x.id === msg.topicId ? { ...x, reply_count: (x.reply_count || 0) + 1 } : x))
+        } else if (msg.type === 'forum-topic-created' && msg.topic?.id) {
+          setTopics(prev => (prev.some(t => t.id === msg.topic.id) ? prev : [msg.topic, ...prev]))
         }
       } catch {}
     }
     ws.onclose = () => { wsRef.current = null }
+    ;(ws as any)._queueJoin = queueJoin
+    ;(ws as any)._flush = flushJoins
     wsRef.current = ws
     return () => { ws.close(); wsRef.current = null }
   }, [user])
 
   // Switch debate rooms on selection change
   useEffect(() => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN || !topicId) return
-    ws.send(JSON.stringify({ type: 'topic-join', payload: { topicId } }))
+    const ws: any = wsRef.current
+    if (!ws || !topicId) return
+    const join = ws._queueJoin || ((id: string) => {
+      const msg = JSON.stringify({ type: 'topic-join', payload: { topicId: id } })
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg)
+    })
+    join(topicId)
+    if (ws._flush) ws._flush()
   }, [topicId])
 
   const select = (id: string | null) => {

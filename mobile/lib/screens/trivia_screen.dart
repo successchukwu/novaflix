@@ -126,6 +126,11 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
             ref.invalidate(_leaderboardProvider);
           } else if (type == 'cosmetics:update') {
             ref.invalidate(_cosmeticsProvider);
+          } else if (type == 'trivia:score') {
+            ref.invalidate(_coinsProvider);
+            ref.invalidate(_leaderboardProvider);
+          } else if (type == 'trivia:guess') {
+            ref.invalidate(_guessProvider);
           }
         } catch (_) {}
       });

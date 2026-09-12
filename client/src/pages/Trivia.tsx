@@ -226,9 +226,25 @@ export default function Trivia() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
+    // Use centralized WS origin if available (parity with HotTakes/Forum)
+    let wsHost = window.location.host
+    try {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE as string | undefined
+      if (apiBase && apiBase.startsWith('http')) {
+        wsHost = new URL(apiBase).host
+      }
+    } catch {}
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
+    const ws = new WebSocket(`${protocol}//${wsHost}/ws?token=${encodeURIComponent(token)}`)
+    // queue topic-joins until OPEN to avoid race
+    const pendingJoins: string[] = []
+    const flushJoins = () => {
+      while (pendingJoins.length && ws.readyState === WebSocket.OPEN) {
+        const msg = pendingJoins.shift()!
+        try { ws.send(msg) } catch {}
+      }
+    }
+    ws.onopen = flushJoins
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data)
@@ -241,36 +257,42 @@ export default function Trivia() {
         if (data?.type === 'cosmetics:update') {
           if (tab === 'shop') loadShop()
         }
+        if (data?.type === 'trivia:score') {
+          // live score update after submit
+          if (data.score != null) setResult((prev: any) => prev ? { ...prev, score: data.score } : prev)
+          if (Array.isArray(data.leaderboard)) setLeaderboard(data.leaderboard)
+        }
+        if (data?.type === 'trivia:guess' && data.question) {
+          setGuessQ(data.question)
+        }
       } catch {}
     }
-    wsRef.current = ws
+    wsRef.current = ws as any
+    // expose flush for other effects if needed
+    ;(wsRef as any)._flush = flushJoins
+    ;(wsRef as any)._queue = pendingJoins
     return () => { ws.close() }
-  }, [tab])
+  }, [])
 
   useEffect(() => {
     const init = async () => {
       const token = getToken()
       if (!token) return
 
-      // Check both trivia and guess status in parallel
-      const [triviaStatus, guessStatus] = await Promise.all([
-        getTriviaStatus(),
-        getGuessStatus(),
-      ])
+      // Check trivia status (guess status derived without side-effect)
+      const triviaStatus = await getTriviaStatus()
 
       if (triviaStatus.success && triviaStatus.completedToday) {
         setTriviaCompleted(true)
         setResult({ ...triviaStatus, alreadyPlayed: true })
-      }
-      if (guessStatus.success && guessStatus.alreadyPlayed) {
-        setGuessCompleted(true)
-        setGuessResult(guessStatus)
-        setGuessDailyLimit(true)
+      } else {
+        loadTrivia()
       }
 
-      // Only load if NOT completed
-      if (!triviaCompleted) loadTrivia()
-      if (!guessCompleted && tab === 'guess') loadGuess()
+      // Defer guess loading until user actually visits guess tab to avoid creating question prematurely
+      if (tab === 'guess') {
+        loadGuess()
+      }
 
       loadStreak()
       getCoinsBalance().then(r => {
@@ -278,7 +300,15 @@ export default function Trivia() {
       })
     }
     init()
-  }, [loadTrivia, loadGuess, loadStreak, tab])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Lazy-load guess when tab switches to guess
+  useEffect(() => {
+    if (tab === 'guess' && !guessCompleted && !guessQ && !guessDailyLimit) {
+      loadGuess()
+    }
+  }, [tab, guessCompleted, guessQ, guessDailyLimit, loadGuess])
 
   const loadGuess = useCallback(() => {
     setGuessPicked(null)
@@ -595,7 +625,7 @@ export default function Trivia() {
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container-high border border-white/5 rounded-2xl p-6 text-center">
                 <Icon name="schedule" className="text-4xl text-amber-400 mx-auto mb-3" />
                 <h2 className="text-headline-sm font-bold text-on-surface mb-2">Daily Limit Reached</h2>
-                <p className="text-on-surface-variant mb-4">You've used all 5 guesses for today.</p>
+                <p className="text-on-surface-variant mb-4">You've used your 1 guess for today.</p>
                 <CountdownCard h={countdown.h} m={countdown.m} s={countdown.s} />
                 <button onClick={() => setTab('trivia')} className="mt-4 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container text-sm font-label-md hover:brightness-110">
                   Play Daily Trivia instead
@@ -609,7 +639,7 @@ export default function Trivia() {
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <h2 className="text-headline-sm font-bold text-on-surface">Guess the Movie</h2>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase bg-blue-500/15 text-blue-300">
-                      {guessRemaining} / 5 left today
+                      {guessRemaining} / 1 left today
                     </span>
                   </div>
                   <p className="text-sm text-on-surface-variant">5 coins per correct guess</p>
