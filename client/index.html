@@ -17,11 +17,19 @@
   <body>
     <div id="root"></div>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+      ;(async () => {
+        if (!('serviceWorker' in navigator)) return
+        window.addEventListener('load', async () => {
+          try {
+            if ('%MODE%' === 'production') {
+              await navigator.serviceWorker.register('/sw.js')
+            } else {
+              await navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister())))
+              await caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+            }
+          } catch {}
         })
-      }
+      })()
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

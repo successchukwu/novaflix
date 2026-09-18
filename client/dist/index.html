@@ -13,17 +13,25 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <title>NovaFlix</title>
-    <script type="module" crossorigin src="/assets/index-CzIFWNTs.js"></script>
+    <script type="module" crossorigin src="/assets/index-ByoosV5U.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-B6ia2PZ6.css">
   </head>
   <body>
     <div id="root"></div>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+      ;(async () => {
+        if (!('serviceWorker' in navigator)) return
+        window.addEventListener('load', async () => {
+          try {
+            if ('production' === 'production') {
+              await navigator.serviceWorker.register('/sw.js')
+            } else {
+              await navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister())))
+              await caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+            }
+          } catch {}
         })
-      }
+      })()
     </script>
   </body>
 </html>
