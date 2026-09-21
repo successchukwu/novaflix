@@ -284,6 +284,9 @@ export async function getCreatorByTmdbId(req, res) {
 export async function getPublicUploadsByCreator(req, res) {
   try {
     const creatorId = req.params.id
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(creatorId)) {
+      return res.json({ success: true, uploads: [], total: 0, page: 1 })
+    }
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50)
     const offset = (page - 1) * limit
