@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { API_BASE } from './lib/config'
 import Layout from './components/layout/Layout'
 import AuthGuard from './components/layout/AuthGuard'
@@ -92,6 +92,7 @@ const HotTakes = lazy(() => import('./pages/HotTakes'))
 const Trivia = lazy(() => import('./pages/Trivia'))
 const SecretRoom = lazy(() => import('./pages/SecretRoom'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
+const CreatorProfile = lazy(() => import('./pages/CreatorProfile'))
 const ClaimStart = lazy(() => import('./pages/ClaimStart'))
 const ClaimPreview = lazy(() => import('./pages/ClaimPreview'))
 const ClaimVerify = lazy(() => import('./pages/ClaimVerify'))
@@ -225,7 +226,8 @@ export default function App() {
           <Route path="/forum/:topicId" element={<AuthGuard><Forum /></AuthGuard>} />
           <Route path="/hot-takes" element={<AuthGuard><HotTakes /></AuthGuard>} />
           <Route path="/trivia" element={<AuthGuard><Trivia /></AuthGuard>} />
-          <Route path="/profile/:id" element={<PublicProfile />} />
+          <Route path="/creators/:id" element={<CreatorProfile />} />
+          <Route path="/profile/:id" element={<Navigate to="/creators/:id" replace />} />
           <Route path="/admin/asset-qc" element={<AdminGuard><AdminAssetQC /></AdminGuard>} />
           <Route path="/admin/filters" element={<AdminGuard><AdminFilters /></AdminGuard>} />
           <Route path="/admin/campaigns" element={<AdminGuard><AdminCampaigns /></AdminGuard>} />

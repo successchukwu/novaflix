@@ -182,7 +182,7 @@ export default function Chat() {
                   <div className="flex-1">
                     <p className="font-label-md text-label-md text-on-surface">{otherUser?.name || 'Loading…'}</p>
                   </div>
-                  <button onClick={() => navigate(`/profile/${active}`)} className="text-on-surface-variant hover:text-primary text-xs">View profile</button>
+                  <button onClick={() => navigate(`/creators/${active}`)} className="text-on-surface-variant hover:text-primary text-xs">View profile</button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">

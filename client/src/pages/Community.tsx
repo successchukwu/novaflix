@@ -536,7 +536,7 @@ export default function Community() {
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <button onClick={() => m.userId && navigate(`/profile/${m.userId}`)} className="text-sm font-semibold text-white truncate hover:text-red-400 transition-colors">{m.name}</button>
+                                <button onClick={() => m.userId && navigate(`/creators/${m.userId}`)} className="text-sm font-semibold text-white truncate hover:text-red-400 transition-colors">{m.name}</button>
                                 {isCreatorMsg && (
                                   <span className="bg-red-600 text-white text-[10px] px-1 py-0.5 rounded font-bold tracking-wide shrink-0">CREATOR</span>
                                 )}
@@ -663,7 +663,7 @@ export default function Community() {
                 {membersLoading ? (
                   Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 bg-white/5 rounded-xl animate-pulse" />)
                 ) : members.map(mm => (
-                  <button key={mm.id} onClick={() => { setShowMembers(false); navigate(`/profile/${mm.id}`) }} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-left transition-colors">
+                  <button key={mm.id} onClick={() => { setShowMembers(false); navigate(`/creators/${mm.id}`) }} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-left transition-colors">
                     {mm.avatar
                       ? <img src={mm.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
                       : <div className="w-9 h-9 rounded-full bg-[#1f1f1f] flex items-center justify-center"><Icon name="person" className="w-4 h-4 text-gray-500" /></div>}

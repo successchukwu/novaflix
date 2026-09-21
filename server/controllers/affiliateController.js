@@ -68,6 +68,10 @@ export async function generateReferral(req, res) {
 
 export async function getStats(req, res) {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100)
+    const offset = (page - 1) * limit
+
     const { rows } = await pool.query(
       `SELECT
         COUNT(*) as total,
@@ -78,14 +82,16 @@ export async function getStats(req, res) {
     )
 
     const { rows: referrals } = await pool.query(
-      `SELECT * FROM affiliate_referrals WHERE referrer_id = $1 ORDER BY created_at DESC`,
-      [req.userId]
+      `SELECT * FROM affiliate_referrals WHERE referrer_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [req.userId, limit, offset]
     )
 
     res.json({
       success: true,
       stats: rows[0] || { total: 0, converted: 0, total_commission: 0 },
       referrals,
+      page,
+      nextPage: referrals.length === limit ? page + 1 : undefined,
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

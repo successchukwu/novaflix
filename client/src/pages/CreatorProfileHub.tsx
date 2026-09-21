@@ -26,7 +26,7 @@ export default function CreatorProfileHub() {
           </div>
           {user && (
             <button
-              onClick={() => navigate(`/profile/${user.id}`)}
+              onClick={() => navigate(`/creators/${user.id}`)}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-label-md hover:brightness-110 transition-all"
             >
               <Icon name="open_in_new" className="w-4 h-4" /> View public profile
@@ -84,7 +84,7 @@ export default function CreatorProfileHub() {
                 <div key={f.user_id} className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0">
                   <span className="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-on-surface-variant shrink-0">{i + 1}</span>
                   {f.avatar ? <img src={f.avatar} alt="" className="w-8 h-8 rounded-full object-cover" /> : <Icon name="person" className="text-on-surface-variant/50" />}
-                  <button onClick={() => navigate(`/profile/${f.user_id}`)} className="flex-1 text-left text-sm font-medium text-on-surface truncate hover:text-primary">
+                  <button onClick={() => navigate(`/creators/${f.user_id}`)} className="flex-1 text-left text-sm font-medium text-on-surface truncate hover:text-primary">
                     {f.name}
                   </button>
                   <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: `${f.badge.color}22`, color: f.badge.color }}>

@@ -11,7 +11,6 @@ import Skeleton from '../components/ui/Skeleton'
 import HoverCard from '../components/features/HoverCard'
 import type { MediaItem } from '../types'
 import Button from '../components/ui/Button'
-import FollowButton from '../components/ui/FollowButton'
 
 const primaryTabs = [
   { id: 'movie', label: 'Movies' },
@@ -94,9 +93,6 @@ export default function Search() {
   const [creatorResults, setCreatorResults] = useState<Creator[]>([])
   const [categoryResults, setCategoryResults] = useState<Category[]>([])
   const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string } | null>(null)
-  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null)
-  const [creatorUploads, setCreatorUploads] = useState<MediaItem[]>([])
-  const [creatorUploadsLoading, setCreatorUploadsLoading] = useState(false)
   const [personCredits, setPersonCredits] = useState<{ cast: PersonCredit[]; crew: PersonCredit[] }>({ cast: [], crew: [] })
   const [creditsLoading, setCreditsLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<MediaItem[]>([])
@@ -204,17 +200,8 @@ export default function Search() {
     setCreditsLoading(false)
   }
 
-  const openCreator = async (creator: Creator) => {
-    setSelectedCreator(creator)
-    setCreatorUploadsLoading(true)
-    try {
-      const res = await fetch(`/api/creator/${creator.id}/uploads`)
-      const data = await res.json()
-      if (data.success) {
-        setCreatorUploads(data.uploads || [])
-      }
-    } catch {}
-    setCreatorUploadsLoading(false)
+  const openCreator = (creator: Creator) => {
+    navigate(`/creators/${creator.id}`)
   }
 
   useEffect(() => {
@@ -263,7 +250,6 @@ export default function Search() {
       }
     }
     setSelectedPerson(null)
-    setSelectedCreator(null)
   }
 
   const handleRecentClick = (q: string) => {
@@ -367,7 +353,7 @@ export default function Search() {
           </div>
         )}
 
-        {!loading && searched && !selectedPerson && !selectedCreator && ((mediaType === 'people' && peopleResults.length === 0) || (mediaType === 'creators' && creatorResults.length === 0) || (mediaType === 'categories' && categoryResults.length === 0) || (mediaType !== 'people' && mediaType !== 'creators' && mediaType !== 'categories' && results.length === 0)) && (
+        {!loading && searched && !selectedPerson && ((mediaType === 'people' && peopleResults.length === 0) || (mediaType === 'creators' && creatorResults.length === 0) || (mediaType === 'categories' && categoryResults.length === 0) || (mediaType !== 'people' && mediaType !== 'creators' && mediaType !== 'categories' && results.length === 0)) && (
           <div className="text-center py-16">
             <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
             <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No results found</h3>
@@ -407,7 +393,7 @@ export default function Search() {
           </>
         )}
 
-        {!loading && mediaType === 'creators' && !selectedCreator && creatorResults.length > 0 && (
+        {!loading && mediaType === 'creators' && creatorResults.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-on-surface-variant text-sm">
@@ -440,11 +426,11 @@ export default function Search() {
           </>
         )}
 
-        {!loading && mediaType === 'categories' && !selectedCreator && categoryResults.length > 0 && (
+        {!loading && mediaType === 'categories' && categoryResults.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-on-surface-variant text-sm">
-                {categoryResults.length} categor{y(categoryResults.length !== 1 ? 'ies' : 'y')}
+                {categoryResults.length} categor{categoryResults.length !== 1 ? 'ies' : 'y'}
               </p>
               <Badge variant="outline">Categories</Badge>
             </div>
@@ -459,71 +445,6 @@ export default function Search() {
                 </Link>
               ))}
             </div>
-          </>
-        )}
-
-        {!loading && selectedCreator && (
-          <>
-            <div className="flex items-center gap-3 mb-6">
-              <button onClick={() => setSelectedCreator(null)} className="p-2 rounded-lg bg-surface-container-high border border-outline/20 hover:border-primary-container/50 transition-colors" aria-label="Back to creators">
-                <Icon name="chevron_left" />
-              </button>
-              <div>
-                <h2 className="text-headline-sm text-on-surface font-bold">{selectedCreator.name}</h2>
-                {selectedCreator.known_for_department && (
-                  <p className="text-on-surface-variant text-sm">{selectedCreator.known_for_department}</p>
-                )}
-              </div>
-            </div>
-            {selectedCreator.avatar && (
-              <div className="mb-6 flex items-start gap-6">
-                <img src={selectedCreator.avatar} alt={selectedCreator.name} className="w-32 h-32 rounded-xl object-cover" />
-                <div className="flex-1">
-                  <p className="text-on-surface-variant mb-4">{selectedCreator.bio || 'No bio available'}</p>
-                  <div className="flex flex-wrap gap-4 text-sm text-on-surface-variant">
-                    <span>{selectedCreator.film_count} films</span>
-                    <span>{selectedCreator.total_views} views</span>
-                    <span>{selectedCreator.followers_count} followers</span>
-                  </div>
-                  <div className="mt-4">
-                    <FollowButton creatorId={selectedCreator.id} />
-                  </div>
-                </div>
-              </div>
-            )}
-            {creatorUploadsLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i}>
-                    <Skeleton variant="poster" className="w-full" />
-                    <Skeleton variant="text" className="w-3/4 mt-2" />
-                  </div>
-                ))}
-              </div>
-            ) : creatorUploads.length === 0 ? (
-              <p className="text-on-surface-variant text-sm py-8">No uploads found.</p>
-            ) : (
-              <>
-                <h3 className="text-on-surface-variant font-label-md mb-3">Films</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
-                  {creatorUploads.map((item, i) => (
-                    <HoverCard
-                      key={`${item.id}-${item.type}`}
-                      item={{
-                        id: item.id,
-                        title: item.title,
-                        poster: item.poster,
-                        backdrop: item.backdrop,
-                        type: item.type,
-                        year: item.year,
-                        overview: item.overview,
-                      }}
-                      index={i}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
           </>
         )}
 

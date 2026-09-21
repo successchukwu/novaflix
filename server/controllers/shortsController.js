@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { addShort, getShortsFeed, getShortsCount, getShortById, incrementShortViews, toggleShortLike, toggleShortBookmark, incrementShortShares, getShortComments, addShortComment, hasUserLikedShort, deleteShort } from '../db.js'
 import { uploadFile, deleteFile } from '../lib/r2.js'
 import { broadcastFeed } from '../services/realtime.js'
+import pool from '../config/database.js'
 
 const ALLOWED_VIDEO_EXT = new Set(['mp4', 'mov', 'webm', 'm4v'])
 const ALLOWED_IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'webp'])
@@ -188,6 +189,45 @@ export async function removeShort(req, res) {
     await deleteShort(short.id)
     await Promise.allSettled(keys.filter(Boolean).map((key) => deleteFile(key)))
     res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getCreatorShorts(req, res) {
+  try {
+    const creatorId = req.params.id
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50)
+    const offset = (page - 1) * limit
+    
+    const { rows, total } = await pool.query(
+      `SELECT s.*, u.name as creator_name, u.avatar as creator_avatar
+       FROM shorts s
+       LEFT JOIN users u ON u.id = s.user_id
+       WHERE s.user_id = $1 AND s.status = 'active'
+       ORDER BY s.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [creatorId, limit, offset]
+    )
+    
+    const totalRes = await pool.query(`SELECT COUNT(*) as count FROM shorts WHERE user_id = $1 AND status = 'active'`, [creatorId])
+    const totalCount = parseInt(totalRes.rows[0].count, 10)
+    
+    // Mark pinned: highest viewed short gets pinned badge
+    const maxViews = Math.max(...rows.map(r => r.views || 0), 0)
+    const shortsWithPinned = rows.map(r => ({
+      ...r,
+      is_pinned: r.views === maxViews && maxViews > 0
+    }))
+    
+    res.json({
+      success: true,
+      shorts: shortsWithPinned,
+      total: totalCount,
+      page,
+      nextPage: offset + rows.length < totalCount ? page + 1 : undefined
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -35,28 +35,28 @@ class SubscriptionPlan {
 /// Replace FLW_PLAN_* placeholders with real IDs from Flutterwave Dashboard > Payment Plans (amounts must match priceNgn, interval monthly).
 const kSubscriptionPlans = [
   SubscriptionPlan(
-    id: 'FLW_PLAN_STUDENT', // TODO: replace with e.g. "107086" (800 NGN)
+    id: '107086', // TODO: replace with e.g. "107086" (800 NGN)
     slug: 'student',
     name: 'Student',
     priceNgn: 800,
     benefits: ['720p HD quality', 'All devices supported', '1 screen at a time', 'Offline downloads (1 device)', 'Ad-supported', '6 skips per hour'],
   ),
   SubscriptionPlan(
-    id: 'FLW_PLAN_BASIC', // TODO: "107087" (1500 NGN)
+    id: '107087', // TODO: "107087" (1500 NGN)
     slug: 'basic',
     name: 'Basic Pass',
     priceNgn: 1500,
     benefits: ['720p HD quality', 'All devices supported', '1 screen at a time', 'Offline downloads (1 device)', 'Completely ad-free', '6 skips per hour'],
   ),
   SubscriptionPlan(
-    id: 'FLW_PLAN_STANDARD', // TODO: "107088" (2500 NGN)
+    id: '107088', // TODO: "107088" (2500 NGN)
     slug: 'standard',
     name: 'Standard',
     priceNgn: 2500,
     benefits: ['1080p Full HD', 'All devices supported', '2 screens simultaneously', 'Offline downloads (2 devices)', 'Completely ad-free', 'Unlimited skips'],
   ),
   SubscriptionPlan(
-    id: 'FLW_PLAN_PREMIUM', // TODO: "107089" (5500 NGN)
+    id: '107089', // TODO: "107089" (5500 NGN)
     slug: 'premium',
     name: 'Premium Ultra',
     priceNgn: 5500,

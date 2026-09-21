@@ -77,7 +77,7 @@ export default function MovieDetail() {
     queryFn: () => fetch(`${API_BASE}/tmdb/creator/batch-check?tmdbIds=${tmdbIds}`).then(r => r.json()),
     enabled: !!tmdbIds,
   })
-  const linkedCastIds = new Set(batchCheck?.linked || [])
+  const linkedCreators: Record<number, string> = batchCheck?.creators || {}
 
   const [showTrailer, setShowTrailer] = useState(false)
 
@@ -272,7 +272,7 @@ export default function MovieDetail() {
         {(cast.length > 0 || crew.length > 0) && (
           <div className="bg-surface-container p-8 rounded-xl border border-white/5">
             <h3 className="text-headline-md mb-4">Cast & Crew</h3>
-            <CastCrew cast={cast} crew={crew} linkedCastIds={linkedCastIds} />
+            <CastCrew cast={cast} crew={crew} linkedCreators={linkedCreators} />
           </div>
         )}
 

@@ -3,7 +3,7 @@ import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { requireCreator } from '../middleware/creatorAuth.js'
 import { rateLimit } from '../middleware/rateLimit.js'
 import multer from 'multer'
-import { createShort, getShorts, getShort, recordShortView, likeShort, bookmarkShort, shareShort, listShortComments, createShortComment, removeShort } from '../controllers/shortsController.js'
+import { createShort, getShorts, getShort, recordShortView, likeShort, bookmarkShort, shareShort, listShortComments, createShortComment, removeShort, getCreatorShorts } from '../controllers/shortsController.js'
 
 const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v']
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -40,6 +40,7 @@ function uploadFields(req, res, next) {
 const router = Router()
 
 router.get('/', optionalAuthMiddleware, getShorts)
+router.get('/creator/:id', optionalAuthMiddleware, getCreatorShorts)
 router.get('/:id', authMiddleware, getShort)
 router.post('/', authMiddleware, requireCreator, rateLimit({ action: 'shorts-upload', max: 15, windowMs: 3600000 }), uploadFields, createShort)
 router.post('/:id/view', optionalAuthMiddleware, rateLimit({ action: 'shorts-view', max: 60, windowMs: 60000 }), recordShortView)

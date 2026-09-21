@@ -392,7 +392,7 @@ export default function HooksCard({
             className="relative"
             onClick={() => {
               if (item.creatorId) navigate(`/creators/${item.creatorId}`)
-              else if (item.creatorName) navigate(`/profile/${item.creatorName}`)
+              else if (item.creatorName) navigate(`/creators/${item.creatorName}`)
             }}
             aria-label={item.creatorName ? `View ${item.creatorName}` : 'View profile'}
           >

@@ -3,11 +3,12 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
-import { uploadFilm, createEgg, youtubePreview, startYoutubeImport, getYoutubeImportStatus } from '../lib/auth'
+import { uploadFilm, uploadFilmWithProgress, createEgg, youtubePreview, startYoutubeImport, getYoutubeImportStatus, type UploadProgress } from '../lib/auth'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
+import UploadProgressModal from '../components/ui/UploadProgressModal'
 
 export default function Upload() {
   const [title, setTitle] = useState('')
@@ -16,6 +17,9 @@ export default function Upload() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [posterFile, setPosterFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const uploadAbortRef = useRef<(() => void) | null>(null)
   const [uploaded, setUploaded] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [uploadId, setUploadId] = useState('')
@@ -55,6 +59,7 @@ export default function Upload() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
+      uploadAbortRef.current?.()
     }
   }, [])
 
@@ -159,6 +164,13 @@ export default function Upload() {
     if (file?.type.startsWith('video/')) setVideoFile(file)
   }, [])
 
+  const cancelUpload = () => {
+    uploadAbortRef.current?.()
+    setUploading(false)
+    setUploadProgress(null)
+    setUploadError(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
@@ -166,20 +178,39 @@ export default function Upload() {
       return
     }
     setUploading(true)
+    setUploadProgress({ loaded: 0, total: videoFile?.size || 0, pct: 0, speedBps: 0, etaSec: null, elapsedSec: 0 })
+    setUploadError(null)
     const token = localStorage.getItem('novaflix-token') || ''
-    const res = await uploadFilm(token, {
-      title,
-      description,
-      genre,
-      videoFile: videoFile || undefined,
-      posterFile: posterFile || undefined,
-    })
+    const { promise, abort } = uploadFilmWithProgress(
+      token,
+      {
+        title,
+        description,
+        genre,
+        videoFile: videoFile || undefined,
+        posterFile: posterFile || undefined,
+      },
+      (p) => setUploadProgress(p)
+    )
+    uploadAbortRef.current = abort
+    const res = await promise
+    uploadAbortRef.current = null
     setUploading(false)
+    setUploadProgress(null)
     if (res.success) {
       setUploadId(res.upload?.id || '')
       setUploaded(true)
     } else {
-      toast.error(res.error || 'Upload failed')
+      if (res.status === 429) {
+        const secs = res.retryAfter ?? 30
+        toast.error(res.error || `Too many uploads in progress. Retry in ${secs}s`)
+        setUploadError(res.error || 'Too many uploads in progress. Please retry shortly.')
+      } else if (res.error === 'Upload cancelled') {
+        toast.error('Upload cancelled')
+      } else {
+        toast.error(res.error || 'Upload failed')
+        setUploadError(res.error || 'Upload failed')
+      }
     }
   }
 
@@ -647,6 +678,14 @@ export default function Upload() {
           </Button>
         </div>
       </Modal>
+
+      <UploadProgressModal
+        open={uploading}
+        progress={uploadProgress}
+        fileName={videoFile?.name}
+        onCancel={cancelUpload}
+        error={uploadError}
+      />
     </div>
   )
 }

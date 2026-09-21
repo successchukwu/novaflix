@@ -108,7 +108,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _query = '';
   String _type = 'movie';
   int? _selectedPersonId;
-  String? _selectedCreatorId;
   bool _showSuggestions = false;
   Timer? _suggestDebounce;
 
@@ -282,7 +281,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   onChanged: (i) => setState(() {
                     _type = ['movie', 'tv', 'people', 'creators', 'categories'][i];
                     _selectedPersonId = null;
-                    _selectedCreatorId = null;
                   }),
                 ),
                 const SizedBox(height: 24),
@@ -626,8 +624,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildCreatorResults() {
     final creators = ref.watch(_creatorResultsProvider(_query));
-    final selected = _selectedCreatorId;
-    if (selected != null) return _buildCreatorUploads(selected);
     return creators.when(
       data: (items) {
         if (items.isEmpty) return const _EmptySearch();
@@ -665,7 +661,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   final dept = c['known_for_department'] as String? ?? '';
                   final filmCount = c['film_count'] as int? ?? 0;
                   return GestureDetector(
-                    onTap: () => setState(() => _selectedCreatorId = id),
+                    onTap: () => context.push('/user/$id'),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -699,74 +695,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   );
                 },
-              ),
-            ),
-          ],
-        );
-      },
-      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
-      error: (_, _) => const _EmptySearch(),
-    );
-  }
-
-  Widget _buildCreatorUploads(String creatorId) {
-    final uploadsProvider = FutureProvider.family<List<MediaItem>, String>((ref, id) async {
-      final api = ref.read(apiServiceProvider);
-      final res = await api.get('/creator/$id/uploads');
-      final data = res.data['uploads'] as List? ?? [];
-      return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
-    });
-    final uploads = ref.watch(uploadsProvider(creatorId));
-    return uploads.when(
-      data: (items) {
-        if (items.isEmpty) {
-          return Column(
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
-                    onPressed: () => setState(() => _selectedCreatorId = null),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('Creator', style: AppTypography.headlineMd, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No uploads found.', style: TextStyle(color: AppColors.onSurfaceVariant)),
-              ),
-            ],
-          );
-        }
-        final cols = gridColumns(MediaQuery.of(context).size.width);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
-                  onPressed: () => setState(() => _selectedCreatorId = null),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Creator Films', style: AppTypography.headlineMd, maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) => GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  childAspectRatio: gridAspectRatio(constraints.maxWidth, cols),
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: items.length,
-                itemBuilder: (_, i) => MovieCard(item: items[i]),
               ),
             ),
           ],

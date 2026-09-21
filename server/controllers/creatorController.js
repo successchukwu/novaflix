@@ -1,30 +1,57 @@
 import { v4 as uuidv4 } from 'uuid'
+import fs from 'fs'
 import pool from '../config/database.js'
 import { addUpload, getUploadsByUserId, getTipsForCreator, getCommentsForCreator, getTotalLikesForCreator, getCreatorDashboardStats, updateUpload, getUploadById } from '../db.js'
-import { uploadFile } from '../lib/r2.js'
+import { uploadFile, uploadStream } from '../lib/r2.js'
+
+function cleanupFiles(files) {
+  for (const f of files || []) {
+    if (!f?.path) continue
+    fs.unlink(f.path, () => {})
+  }
+}
 
 export async function addUploadHandler(req, res) {
+  const toCleanup = []
+  // Abort cleanup: if client disconnects, remove temp files
+  req.on('close', () => {
+    if (!res.writableFinished) cleanupFiles(toCleanup)
+  })
   try {
     const { title, description, genre } = req.body
-    if (!title || !genre) return res.status(400).json({ error: 'Title and genre required' })
+    if (!title || !genre) {
+      cleanupFiles([...(req.files?.video || []), ...(req.files?.thumbnail || [])])
+      return res.status(400).json({ error: 'Title and genre required' })
+    }
 
     const videoFile = req.files?.video?.[0]
     const thumbFile = req.files?.thumbnail?.[0]
+    if (videoFile) toCleanup.push(videoFile)
+    if (thumbFile) toCleanup.push(thumbFile)
     const ext = videoFile ? videoFile.originalname.split('.').pop() || 'mp4' : 'mp4'
     const id = uuidv4()
     const videoKey = `movies/${req.userId}/${id}.${ext}`
     let videoUrl = ''
 
     if (videoFile) {
-      const result = await uploadFile({ buffer: videoFile.buffer, key: videoKey, contentType: videoFile.mimetype })
-      if (!result.success) return res.status(500).json({ error: 'Video upload failed' })
+      const filePath = videoFile.path
+      const result = filePath
+        ? await uploadStream({ filePath, key: videoKey, contentType: videoFile.mimetype, fileSize: videoFile.size })
+        : await uploadFile({ buffer: videoFile.buffer, key: videoKey, contentType: videoFile.mimetype })
+      if (!result.success) {
+        cleanupFiles(toCleanup)
+        return res.status(500).json({ error: 'Video upload failed' })
+      }
       videoUrl = result.url
     }
 
     let thumbnailUrl = ''
     if (thumbFile) {
       const thumbKey = `movies/${req.userId}/${id}-thumb.jpg`
-      const result = await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
+      const thumbPath = thumbFile.path
+      const result = thumbPath
+        ? await uploadStream({ filePath: thumbPath, key: thumbKey, contentType: thumbFile.mimetype, fileSize: thumbFile.size })
+        : await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
       if (result.success) thumbnailUrl = result.url
     }
 
@@ -43,8 +70,10 @@ export async function addUploadHandler(req, res) {
       revenue: 0,
     }
     await addUpload(upload)
+    cleanupFiles(toCleanup)
     res.json({ success: true, upload })
   } catch (err) {
+    cleanupFiles(toCleanup)
     res.status(500).json({ error: err.message })
   }
 }
@@ -59,6 +88,8 @@ export async function getUploads(req, res) {
 }
 
 export async function updateUploadHandler(req, res) {
+  const toCleanup = req.file ? [req.file] : []
+  req.on('close', () => { if (!res.writableFinished) cleanupFiles(toCleanup) })
   try {
     const { id } = req.params
     const { title, description, genre } = req.body
@@ -68,7 +99,10 @@ export async function updateUploadHandler(req, res) {
     let thumbnailUrl
     if (thumbFile) {
       const thumbKey = `movies/${req.userId}/${id}-thumb.jpg`
-      const result = await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
+      const thumbPath = thumbFile.path
+      const result = thumbPath
+        ? await uploadStream({ filePath: thumbPath, key: thumbKey, contentType: thumbFile.mimetype, fileSize: thumbFile.size })
+        : await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
       if (result.success) thumbnailUrl = result.url
     }
 
@@ -79,12 +113,15 @@ export async function updateUploadHandler(req, res) {
     if (thumbnailUrl) fields.thumbnail_url = thumbnailUrl
 
     if (Object.keys(fields).length === 0) {
+      cleanupFiles(toCleanup)
       return res.status(400).json({ error: 'Nothing to update' })
     }
 
     const updated = await updateUpload(id, fields)
+    cleanupFiles(toCleanup)
     res.json({ success: true, upload: updated })
   } catch (err) {
+    cleanupFiles(toCleanup)
     res.status(500).json({ error: err.message })
   }
 }
@@ -201,10 +238,10 @@ export async function searchCreators(req, res) {
     }
     const query = `%${q.trim()}%`
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.avatar, u.bio,
+      `SELECT u.id, u.name, u.avatar, u.bio, u.verified,
               cp.known_for_department, cp.tmdb_person_id,
-              (SELECT COUNT(*) FROM uploads WHERE user_id = u.id) as film_count,
-              (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id) as total_views,
+              (SELECT COUNT(*) FROM uploads WHERE user_id = u.id AND status = 'active') as film_count,
+              (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id AND status = 'active') as total_views,
               (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes,
               (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as followers_count
        FROM users u
@@ -241,5 +278,28 @@ export async function getCreatorByTmdbId(req, res) {
   } catch (err) {
     console.error('[creator] by-tmdb failed:', err.message);
     res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getPublicUploadsByCreator(req, res) {
+  try {
+    const creatorId = req.params.id
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50)
+    const offset = (page - 1) * limit
+    const { rows } = await pool.query(
+      `SELECT id, title, description, genre, filename, thumbnail_url, views, duration_seconds, created_at
+       FROM uploads WHERE user_id = $1 AND status = 'active'
+       ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [creatorId, limit, offset]
+    )
+    const { rows: [{ total }] } = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM uploads WHERE user_id = $1 AND status = 'active'`,
+      [creatorId]
+    )
+    res.json({ success: true, uploads: rows, total, page, nextPage: rows.length === limit ? page + 1 : undefined })
+  } catch (err) {
+    console.error('[creator] public uploads failed:', err.message)
+    res.status(500).json({ error: err.message })
   }
 }

@@ -569,13 +569,20 @@ export async function batchCheckCreators(req, res) {
     
     const ids = tmdbIds.split(',').map(Number).filter(n => !isNaN(n))
     const { rows } = await pool.query(
-      `SELECT tmdb_person_id FROM creator_profiles WHERE tmdb_person_id = ANY($1)`,
+      `SELECT tmdb_person_id, user_id FROM creator_profiles WHERE tmdb_person_id = ANY($1)`,
       [ids]
     )
     
+    const linked = rows.map(r => r.tmdb_person_id)
+    const creators = {}
+    for (const r of rows) {
+      creators[r.tmdb_person_id] = r.user_id
+    }
+    
     res.json({ 
       success: true, 
-      linked: rows.map(r => r.tmdb_person_id) 
+      linked,
+      creators
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

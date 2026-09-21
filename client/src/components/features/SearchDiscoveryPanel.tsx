@@ -121,7 +121,7 @@ function CreatorRow({ creator, onSelect }: { creator: DiscoveryCreator; onSelect
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-1.5 min-w-0">
           <span className="font-label-md text-label-md text-on-surface truncate">{creator.name}</span>
-          <VerifiedBadge />
+          {creator.verified && <VerifiedBadge />}
         </span>
         <span className="block text-xs text-on-surface-variant/60 truncate">
           {creator.roles && creator.roles.length > 0
@@ -187,7 +187,7 @@ export default function SearchDiscoveryPanel({ anchorRef, query, open, onClose }
 
   const goCreator = (id: string) => {
     onClose()
-    navigate(`/profile/${id}`)
+    navigate(`/creators/${id}`)
   }
   const goMovie = (id: string) => {
     onClose()
@@ -215,7 +215,7 @@ export default function SearchDiscoveryPanel({ anchorRef, query, open, onClose }
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1.5 min-w-0">
                 <span className="text-headline-sm font-extrabold text-on-surface truncate">{topResult.name}</span>
-                <VerifiedBadge />
+                {topResult.verified && <VerifiedBadge />}
               </span>
               <span className="block text-xs text-on-surface-variant/70 truncate mt-0.5">
                 {topResult.roles && topResult.roles.length > 0 ? topResult.roles.join(' • ') : 'Creator'}

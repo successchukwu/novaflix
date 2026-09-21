@@ -3,6 +3,7 @@ import { uploadFile } from '../lib/r2.js'
 import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, getContentCommentCount, deleteComment, getCommentsForCreator, addFollower, removeFollower, isFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, findUserById, checkAndAwardAchievements, addXp, recordFanEngagement, createNotification } from '../db.js'
 import { notifyUser, broadcastFeed } from '../services/realtime.js'
 import { notifyCreator } from '../services/creatorRealtime.js'
+import pool from '../config/database.js'
 
 function emitCreatorEngagement(creatorId, payload) {
   notifyCreator(creatorId, 'engagement', payload)
@@ -268,6 +269,61 @@ export async function listFollowing(req, res) {
       result.push({ ...u, isFollowing: isFollow })
     }
     res.json({ success: true, users: result })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getCreatorLiked(req, res) {
+  try {
+    const creatorId = req.params.id
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50)
+    const offset = (page - 1) * limit
+    
+    // Get liked shorts
+    const likedShorts = await pool.query(
+      `SELECT s.id, s.title, s.description, s.video_url, s.thumbnail_url, s.duration_seconds, s.views, s.likes, s.created_at,
+              u.name as creator_name, u.avatar as creator_avatar
+       FROM short_likes sl
+       JOIN shorts s ON s.id = sl.short_id
+       LEFT JOIN users u ON u.id = s.user_id
+       WHERE sl.user_id = $1 AND s.status = 'active'
+       ORDER BY sl.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [creatorId, limit, offset]
+    )
+    
+// Get liked uploads (movies/videos) - safe regex guard prevents crash on non-UUID content_id
+    const likedUploads = await pool.query(
+      `SELECT u.id, u.title, u.description, u.filename as video_url, u.thumbnail_url, u.duration_seconds, u.views, 0 as likes, u.created_at,
+              cr.name as creator_name, cr.avatar as creator_avatar
+       FROM likes l
+       JOIN uploads u ON u.id = l.content_id::uuid
+       LEFT JOIN users cr ON cr.id = u.user_id
+       WHERE l.content_type = 'upload' AND u.status = 'active'
+       AND l.content_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       AND l.user_id = $1::uuid
+       ORDER BY l.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [creatorId, limit, offset]
+    )
+    
+    // Combine and sort by like date (we'd need a unified query for proper pagination, but for now merge)
+    const shorts = likedShorts.rows.map(r => ({ ...r, type: 'short' }))
+    const uploads = likedUploads.rows.map(r => ({ ...r, type: 'upload' }))
+    
+    const combined = [...shorts, ...uploads]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit)
+    
+    res.json({
+      success: true,
+      videos: combined,
+      total: likedShorts.rows.length + likedUploads.rows.length,
+      page,
+      nextPage: combined.length === limit ? page + 1 : undefined
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

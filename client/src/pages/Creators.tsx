@@ -395,7 +395,7 @@ export default function Creators() {
         ) : (
           <motion.div {...stagger} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
             {creators.slice(0, 10).map((c) => (
-              <CreatorCard key={c.id} creator={c} onOpen={() => navigate(`/profile/${c.id}`)} />
+              <CreatorCard key={c.id} creator={c} onOpen={() => navigate(`/creators/${c.id}`)} />
             ))}
           </motion.div>
         )}

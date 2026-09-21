@@ -23,6 +23,7 @@ export interface DiscoveryCreator {
   username?: string
   avatar: string | null
   bio: string | null
+  verified?: boolean
   known_for_department?: string | null
   film_count: number
   directed_count?: number

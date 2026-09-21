@@ -57,9 +57,10 @@ export default function GlowGiftButton({ creatorId, recipientName = 'this creato
     <div className={`relative ${className}`}>
       <motion.button
         whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileTap={{ scale: 0.97 }}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-xl text-sm font-medium text-amber-300 hover:from-amber-500/30 hover:to-yellow-500/30 transition-colors"
+        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-xl text-sm font-medium text-amber-300 hover:from-amber-500/30 hover:to-yellow-500/30 active:from-amber-500/40 active:to-yellow-500/40 active:shadow-[0_2px_8px_rgba(245,158,11,0.3)] transition-all"
+        style={{ boxShadow: open ? '0 2px 8px rgba(245,158,11,0.3)' : undefined }}
       >
         <Icon name="bolt" fill={true} className="text-amber-400" />
         Send Glow

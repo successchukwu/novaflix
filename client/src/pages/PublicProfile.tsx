@@ -302,12 +302,9 @@ export default function PublicProfile() {
           )}
 
           {user && user.id !== id && (
-            <button
-              onClick={() => navigate(`/chat?with=${id}`)}
-              className="w-full py-3 rounded-lg border border-primary/30 text-primary font-label-md hover:bg-primary/10 transition-colors inline-flex items-center justify-center gap-2"
-            >
-              <Icon name="chat_bubble" className="w-4 h-4" /> Message
-            </button>
+            <div className="w-full flex justify-center py-2">
+              <GlowGiftButton creatorId={id!} recipientName={stats?.profile?.name} />
+            </div>
           )}
           {renderListModal()}
         </div>
@@ -347,7 +344,7 @@ export default function PublicProfile() {
                       <Icon name="person" className="w-4 h-4 text-on-surface-variant/50" />
                     </div>
                   )}
-                  <button onClick={() => { closeList(); navigate(`/profile/${u.id}`) }} className="flex-1 text-left font-label-md text-label-md text-on-surface truncate">
+                  <button onClick={() => { closeList(); navigate(`/creators/${u.id}`) }} className="flex-1 text-left font-label-md text-label-md text-on-surface truncate">
                     {u.name}
                   </button>
                   {user && user.id !== u.id && <FollowButton creatorId={u.id} />}
@@ -398,11 +395,17 @@ export default function PublicProfile() {
 
               <div className="flex-1 min-w-0">
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-on-surface-variant mb-1">
-                  Verified Creator
-                  {/* Verified badge */}
-                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary-container text-on-primary-container" title="Verified creator">
-                    <Icon name="check" className="w-2.5 h-2.5" />
-                  </span>
+                  {creator.verified ? (
+                    <>
+                      Verified Creator
+                      {/* Verified badge */}
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary-container text-on-primary-container" title="Verified creator">
+                        <Icon name="check" className="w-2.5 h-2.5" />
+                      </span>
+                    </>
+                  ) : (
+                    'Creator'
+                  )}
                 </p>
                 {/* Bold creator-name header */}
                 <h1 className="text-headline-lg-mobile md:text-display-lg font-extrabold text-on-surface leading-tight break-words">
@@ -487,7 +490,7 @@ export default function PublicProfile() {
               {similar.map((c: DiscoverySimilarCreator) => (
                 <button
                   key={c.id}
-                  onClick={() => navigate(`/profile/${c.id}`)}
+                  onClick={() => navigate(`/creators/${c.id}`)}
                   className="group flex flex-col items-center text-center gap-3 p-4 rounded-xl bg-surface-container border border-white/5 hover:border-white/20 hover:bg-surface-container-high transition-all"
                 >
                   <span className="w-20 h-20 rounded-full overflow-hidden bg-surface-container-highest flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -500,9 +503,11 @@ export default function PublicProfile() {
                   <span className="min-w-0">
                     <span className="flex items-center justify-center gap-1">
                       <span className="font-label-md text-label-md text-on-surface truncate">{c.name}</span>
-                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-primary-container text-on-primary-container shrink-0">
-                        <Icon name="check" className="w-2 h-2" />
-                      </span>
+                      {c.verified && (
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-primary-container text-on-primary-container shrink-0">
+                          <Icon name="check" className="w-2 h-2" />
+                        </span>
+                      )}
                     </span>
                     <span className="block text-xs text-on-surface-variant/50 mt-0.5">
                       {c.film_count} film{c.film_count !== 1 ? 's' : ''}
@@ -540,7 +545,7 @@ export default function PublicProfile() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <button onClick={() => navigate(`/profile/${f.user_id}`)} className="font-label-md text-label-md text-on-surface hover:text-primary transition-colors truncate">
+                    <button onClick={() => navigate(`/creators/${f.user_id}`)} className="font-label-md text-label-md text-on-surface hover:text-primary transition-colors truncate">
                       {f.name}
                     </button>
                     <p className="text-on-surface-variant/60 text-xs">❤ {f.likes} · 💬 {f.comments} · {f.watch_minutes}m watched</p>
@@ -555,14 +560,11 @@ export default function PublicProfile() {
           </div>
         )}
 
-        {/* Message */}
+        {/* Glow Token */}
         {user && user.id !== id && (
-          <button
-            onClick={() => navigate(`/chat?with=${id}`)}
-            className="mb-12 w-full py-3 rounded-lg border border-primary/30 text-primary font-label-md hover:bg-primary/10 transition-colors inline-flex items-center justify-center gap-2"
-          >
-            <Icon name="chat_bubble" className="w-4 h-4" /> Message
-          </button>
+          <div className="mb-12 flex justify-center">
+            <GlowGiftButton creatorId={id!} recipientName={creator.name} />
+          </div>
         )}
       </div>
 

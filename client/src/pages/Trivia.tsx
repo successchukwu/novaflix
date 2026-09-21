@@ -764,7 +764,7 @@ export default function Trivia() {
                   </span>
                   {u.avatar ? <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover" /> : <Icon name="person" className="text-on-surface-variant/50" />}
                   <div className="flex-1 min-w-0">
-                    <button onClick={() => navigate(`/profile/${u.user_id}`)} className="text-sm font-medium text-on-surface truncate hover:text-primary">{u.name}</button>
+                    <button onClick={() => navigate(`/creators/${u.user_id}`)} className="text-sm font-medium text-on-surface truncate hover:text-primary">{u.name}</button>
                     <p className="text-xs text-on-surface-variant/60">🔥 {u.streak} streak · {u.total_correct} correct</p>
                   </div>
                   <span className="text-sm font-bold text-on-surface">{u.total_points} pts</span>

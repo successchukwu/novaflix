@@ -180,3 +180,11 @@ export async function getOrders(req, res) {
     res.json({ success: true, orders })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
+
+export async function getCreatorProducts(req, res) {
+  try {
+    const creatorId = req.params.id
+    const products = await getProductsByCreator(creatorId)
+    res.json({ success: true, products })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}

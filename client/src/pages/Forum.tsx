@@ -421,7 +421,7 @@ export default function Forum() {
                 </span>
                 <div className="text-sm text-on-surface-variant mb-1.5">
                   {topic.category} · by{' '}
-                  <button onClick={() => navigate(`/profile/${topic.author_id}`)} className="font-medium text-on-surface hover:text-red-400">{topic.author_name}</button>
+                  <button onClick={() => navigate(`/creators/${topic.author_id}`)} className="font-medium text-on-surface hover:text-red-400">{topic.author_name}</button>
                   {' '}· {timeAgo(topic.created_at)}
                 </div>
                 <h2 className="text-lg md:text-xl font-bold leading-snug text-on-surface mb-3">{topic.title}</h2>

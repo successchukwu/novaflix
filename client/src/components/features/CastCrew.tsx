@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 
 const IMG_BASE = 'https://image.tmdb.org/t/p/w185'
 
-type Person = { id: number | string; name: string; profile_path: string | null; detail: string; linked?: boolean }
+type Person = { id: number | string; name: string; profile_path: string | null; detail: string; linked?: boolean; userId?: string }
 
 function initials(name: string) {
   return name
@@ -18,7 +18,7 @@ function initials(name: string) {
 
 function PersonCard({ person }: { person: Person }) {
   const isLinked = person.linked
-  const profileUrl = isLinked ? `/creator/profile/${person.id}` : null
+  const profileUrl = isLinked && person.userId ? `/profile/${person.userId}` : null
 
   return (
     <div className="flex-shrink-0 w-[116px] snap-start">
@@ -41,7 +41,7 @@ function PersonCard({ person }: { person: Person }) {
         )}
         {isLinked && (
           <span className="absolute top-1 right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-            <Icon name="verified" size="sm" className="inline" /> Verified
+            <Icon name="verified" size="sm" className="inline" /> Creator
           </span>
         )}
       </div>
@@ -71,10 +71,10 @@ function PersonCard({ person }: { person: Person }) {
 interface CastCrewProps {
   cast: CastMember[]
   crew: CrewMember[]
-  linkedCastIds?: Set<number>
+  linkedCreators?: Record<number, string>
 }
 
-export default function CastCrew({ cast, crew, linkedCastIds = new Set() }: CastCrewProps) {
+export default function CastCrew({ cast, crew, linkedCreators = {} }: CastCrewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showLeft, setShowLeft] = useState(false)
   const [showRight, setShowRight] = useState(true)
@@ -93,7 +93,7 @@ export default function CastCrew({ cast, crew, linkedCastIds = new Set() }: Cast
   }
 
   const people = [
-    ...cast.map((c) => ({ id: c.id, name: c.name, profile_path: c.profile_path, detail: c.character, linked: linkedCastIds.has(c.id) })),
+    ...cast.map((c) => ({ id: c.id, name: c.name, profile_path: c.profile_path, detail: c.character, linked: !!linkedCreators[c.id], userId: linkedCreators[c.id] })),
     ...crew.map((c) => ({ id: `c-${c.id}-${c.job}`, name: c.name, profile_path: c.profile_path, detail: c.job, linked: false })),
   ]
 

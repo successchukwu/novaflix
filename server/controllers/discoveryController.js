@@ -64,13 +64,14 @@ async function searchCreators({ q, limit = 8 }) {
     u.name                            AS username,
     u.avatar,
     u.bio,
+    u.verified,
     cp.known_for_department,
     cp.tmdb_person_id,
-    (SELECT COUNT(*) FROM uploads WHERE user_id = u.id)                        AS film_count,
+    (SELECT COUNT(*) FROM uploads WHERE user_id = u.id AND status = 'active')                  AS film_count,
     (SELECT COUNT(*) FROM movie_creators WHERE creator_id = u.id AND role = 'DIRECTED_BY') AS directed_count,
     (SELECT COUNT(*) FROM movie_creators WHERE creator_id = u.id AND role = 'ACTED_IN')    AS acted_count,
     (SELECT COUNT(*) FROM followers WHERE following_id = u.id)                 AS followers_count,
-    (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id)         AS total_views`
+    (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id AND status = 'active') AS total_views`
 
   if (await detectTrgm()) {
     const { rows } = await pool.query(
@@ -303,6 +304,7 @@ export async function getCreatorProfile(req, res) {
               COALESCE(cp.display_name, u.name) AS name,
               u.avatar,
               u.bio,
+              u.verified,
               cp.known_for_department,
               cp.tmdb_person_id,
               (SELECT COUNT(*) FROM followers WHERE following_id = u.id) AS followers_count,
@@ -352,23 +354,23 @@ export async function getCreatorProfile(req, res) {
     const directed = directedRes.rows
     const acted = actedRes.rows
 
-    // ---- Fans Also Like ----------------------------------------------------
+// ---- Fans Also Like ----------------------------------------------------
     // Build every creator's tag vocabulary from their films' structural tags,
     // then rank the others by overlap with this creator's tags. Computed in
     // JS: the catalogue is modest and this keeps the ranking logic readable.
     const vocabRes = await pool.query(
       `SELECT mc.creator_id,
-              COALESCE(cp.display_name, usr.name) AS name,
-              usr.avatar, usr.bio,
-              COUNT(mc.movie_id) AS film_count,
-              jsonb_agg(DISTINCT je.value) AS tag_pool
-       FROM movie_creators mc
-       JOIN users usr ON usr.id = mc.creator_id
-       LEFT JOIN creator_profiles cp ON cp.user_id = mc.creator_id
-       LEFT JOIN uploads u ON u.id = mc.movie_id AND u.status = 'active'
-       LEFT JOIN LATERAL jsonb_array_elements_text(COALESCE(u.tags, '[]'::jsonb)) je ON TRUE
-       WHERE usr.role = 'creator'
-       GROUP BY mc.creator_id, cp.display_name, usr.name, usr.avatar, usr.bio`
+               COALESCE(cp.display_name, usr.name) AS name,
+               usr.avatar, usr.bio, usr.verified,
+               COUNT(mc.movie_id) AS film_count,
+               jsonb_agg(DISTINCT je.value) AS tag_pool
+        FROM movie_creators mc
+        JOIN users usr ON usr.id = mc.creator_id
+        LEFT JOIN creator_profiles cp ON cp.user_id = mc.creator_id
+        LEFT JOIN uploads u ON u.id = mc.movie_id AND u.status = 'active'
+        LEFT JOIN LATERAL jsonb_array_elements_text(COALESCE(u.tags, '[]'::jsonb)) je ON TRUE
+        WHERE usr.role = 'creator'
+        GROUP BY mc.creator_id, cp.display_name, usr.name, usr.avatar, usr.bio, usr.verified`
     )
 
     const myTags = new Set(
@@ -389,6 +391,7 @@ export async function getCreatorProfile(req, res) {
           name: row.name,
           avatar: row.avatar,
           bio: row.bio,
+          verified: !!row.verified,
           film_count: Number(row.film_count),
           tags: [...new Set(theirTags)].slice(0, 5),
           shared_tags: [...new Set(shared)],

@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import { creatorOrAdminMiddleware } from '../middleware/admin.js'
 import {
   createProductHandler, updateProductHandler, listProducts, getProduct, myProducts,
-  checkout, verifyOrder, getOrders,
+  checkout, verifyOrder, getOrders, getCreatorProducts,
 } from '../controllers/storeController.js'
 import multer from 'multer'
 
@@ -11,6 +11,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 const router = Router()
 
+router.get('/creator/:id', getCreatorProducts)
 router.post('/', authMiddleware, creatorOrAdminMiddleware, upload.single('image'), createProductHandler)
 router.patch('/:id', authMiddleware, creatorOrAdminMiddleware, upload.single('image'), updateProductHandler)
 router.get('/', listProducts)

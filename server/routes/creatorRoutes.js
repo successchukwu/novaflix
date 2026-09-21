@@ -7,8 +7,27 @@ import * as tools from '../controllers/creatorToolsController.js'
 import * as liveStream from '../controllers/liveStreamController.js'
 import { getMyEarnings } from '../controllers/creatorEarningsController.js'
 import multer from 'multer'
+import os from 'os'
+import path from 'path'
+import fs from 'fs'
+import { uploadQueueMiddleware } from '../middleware/uploadQueue.js'
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } })
+const tmpBase = process.env.UPLOAD_TEMP_DIR || path.join(os.tmpdir(), 'novaflix-uploads')
+try { fs.mkdirSync(tmpBase, { recursive: true }) } catch {}
+
+const diskStorage = multer.diskStorage({
+  destination(req, file, cb) { cb(null, tmpBase) },
+  filename(req, file, cb) {
+    const safe = (file.originalname || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_')
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`)
+  },
+})
+
+const MAX_GB = Number(process.env.MAX_UPLOAD_GB) || 1
+const upload = multer({
+  storage: diskStorage,
+  limits: { fileSize: MAX_GB * 1024 * 1024 * 1024 },
+})
 
 const router = Router()
 
@@ -16,14 +35,15 @@ const router = Router()
 router.get('/public', creatorController.getPublicCreators)
 router.get('/search', creatorController.searchCreators)
 router.get('/by-tmdb/:tmdbId', creatorController.getCreatorByTmdbId)
+router.get('/:id/uploads', creatorController.getPublicUploadsByCreator)
 
 // Creator-only routes — require auth + creator role
-router.post('/upload', authMiddleware, requireCreator, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), creatorController.addUploadHandler)
+router.post('/upload', authMiddleware, requireCreator, uploadQueueMiddleware, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), creatorController.addUploadHandler)
 router.post('/youtube/preview', authMiddleware, requireCreator, youtubeController.youtubePreview)
 router.post('/youtube/import', authMiddleware, requireCreator, youtubeController.youtubeImport)
 router.get('/youtube/imports/:jobId', authMiddleware, requireCreator, youtubeController.youtubeImportStatus)
 router.get('/uploads', authMiddleware, requireCreator, creatorController.getUploads)
-router.put('/uploads/:id', authMiddleware, requireCreator, upload.single('thumbnail'), creatorController.updateUploadHandler)
+router.put('/uploads/:id', authMiddleware, requireCreator, uploadQueueMiddleware, upload.single('thumbnail'), creatorController.updateUploadHandler)
 router.get('/stats', authMiddleware, requireCreator, creatorController.getStats)
 router.get('/dashboard', authMiddleware, requireCreator, creatorController.getDashboard)
 router.get('/comments', authMiddleware, requireCreator, creatorController.getCreatorComments)

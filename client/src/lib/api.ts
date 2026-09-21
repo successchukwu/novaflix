@@ -142,6 +142,7 @@ export interface DiscoverySimilarCreator {
   film_count: number
   tags: string[]
   shared_tags: string[]
+  verified?: boolean
 }
 
 export interface CreatorDiscoveryProfile {
@@ -152,11 +153,13 @@ export interface CreatorDiscoveryProfile {
     name: string
     avatar: string | null
     bio: string | null
+    verified?: boolean
     known_for_department: string | null
     followers_count: number
     film_count: number
     total_views: number
     total_likes: number
+    isLive?: boolean
   }
   counts: { directed: number; acted: number }
   directed: DiscoveryMovieCredit[]
@@ -181,6 +184,7 @@ export interface Creator {
   name: string
   avatar: string | null
   bio: string | null
+  verified?: boolean
   known_for_department: string
   tmdb_person_id: number | null
   film_count: number
@@ -507,4 +511,68 @@ export interface ArticleContent {
 
 export function fetchArticleContent(url: string): Promise<{ success: boolean; article?: ArticleContent; error?: string }> {
   return fetchJson(`${BASE}/news/article-content`, { url })
+}
+
+// ===== CREATOR PROFILE (Reels/Store tabs) =====
+export interface CreatorShort {
+  id: string
+  user_id: string
+  title: string
+  description: string
+  video_url: string
+  thumbnail_url: string | null
+  duration_seconds: number
+  views: number
+  likes: number
+  is_pinned: boolean
+  created_at: string
+  creator_name: string
+  creator_avatar: string | null
+}
+
+export interface CreatorLikedVideo {
+  id: string
+  type: 'short' | 'upload'
+  title: string
+  description: string
+  video_url: string
+  thumbnail_url: string | null
+  duration_seconds: number
+  views: number
+  likes: number
+  created_at: string
+  creator_name: string
+  creator_avatar: string | null
+}
+
+export interface CreatorProduct {
+  id: string
+  creator_id: string
+  name: string
+  description: string
+  price: number
+  currency: string
+  image_url: string | null
+  product_type: 'physical' | 'digital'
+  status: string
+  created_at: string
+}
+
+export async function getCreatorShorts(creatorId: string, page = 1, limit = 20): Promise<{ success: boolean; shorts: CreatorShort[]; total: number; page: number; nextPage?: number; error?: string }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  return fetchJson(`${BASE}/shorts/creator/${encodeURIComponent(creatorId)}?${params}`)
+}
+
+export async function getCreatorLiked(creatorId: string, page = 1, limit = 20): Promise<{ success: boolean; videos: CreatorLikedVideo[]; total: number; page: number; nextPage?: number; error?: string }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  return fetchJson(`${BASE}/interactions/creator/${encodeURIComponent(creatorId)}/liked?${params}`)
+}
+
+export async function getCreatorProducts(creatorId: string): Promise<{ success: boolean; products: CreatorProduct[]; error?: string }> {
+  return fetchJson(`${BASE}/store/creator/${encodeURIComponent(creatorId)}`)
+}
+
+export async function getCreatorUploadsPublic(creatorId: string, page = 1, limit = 20): Promise<{ success: boolean; uploads: any[]; total: number; page: number; nextPage?: number; error?: string }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  return fetchJson(`${BASE}/creator/${encodeURIComponent(creatorId)}/uploads?${params}`)
 }

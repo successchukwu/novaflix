@@ -386,6 +386,99 @@ export async function uploadFilm(token: string, data: { title: string; descripti
   }
 }
 
+export type UploadProgress = {
+  loaded: number
+  total: number
+  pct: number
+  speedBps: number
+  etaSec: number | null
+  elapsedSec: number
+}
+
+export function uploadFilmWithProgress(
+  token: string,
+  data: { title: string; description: string; genre: string; videoFile?: File; posterFile?: File },
+  onProgress: (p: UploadProgress) => void,
+  signal?: AbortSignal
+): { promise: Promise<any>; abort: () => void } {
+  const formData = new FormData()
+  formData.append('title', data.title)
+  formData.append('description', data.description)
+  formData.append('genre', data.genre)
+  if (data.videoFile) formData.append('video', data.videoFile)
+  if (data.posterFile) formData.append('thumbnail', data.posterFile)
+
+  let xhr: XMLHttpRequest | null = new XMLHttpRequest()
+  let lastEmit = 0
+  const startedAt = Date.now()
+
+  const promise = new Promise<any>((resolve) => {
+    if (!xhr) return resolve({ success: false, error: 'Upload aborted' })
+
+    xhr.open('POST', `${BASE}/creator/upload`)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+    const onAbort = () => {
+      try { xhr?.abort() } catch {}
+    }
+    if (signal) {
+      if (signal.aborted) onAbort()
+      else signal.addEventListener('abort', onAbort, { once: true })
+    }
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return
+      const now = Date.now()
+      if (now - lastEmit < 200 && e.loaded < e.total) return
+      lastEmit = now
+      const elapsedSec = (now - startedAt) / 1000
+      const speedBps = elapsedSec > 0 ? e.loaded / elapsedSec : 0
+      const remaining = e.total - e.loaded
+      const etaSec = speedBps > 0 ? remaining / speedBps : null
+      onProgress({
+        loaded: e.loaded,
+        total: e.total,
+        pct: Math.round((e.loaded / e.total) * 100),
+        speedBps,
+        etaSec,
+        elapsedSec,
+      })
+    })
+
+    xhr.addEventListener('load', () => {
+      const status = xhr?.status ?? 0
+      let body: any = null
+      try { body = xhr?.responseText ? JSON.parse(xhr.responseText) : null } catch { body = { success: false, error: 'Invalid server response' } }
+      if (status === 429) {
+        const retryAfter = xhr?.getResponseHeader('Retry-After')
+        resolve({ success: false, error: body?.error || 'Too many uploads in progress. Please retry shortly.', retryAfter: retryAfter ? Number(retryAfter) : 30, status })
+        return
+      }
+      if (status >= 200 && status < 300) {
+        // Ensure final 100% emit
+        const total = body ? 0 : 0
+        void total
+        resolve(body ?? { success: false, error: 'Empty response' })
+      } else {
+        resolve(body ?? { success: false, error: `Upload failed (${status})`, status })
+      }
+    })
+
+    xhr.addEventListener('error', () => resolve({ success: false, error: 'Network error' }))
+    xhr.addEventListener('abort', () => resolve({ success: false, error: 'Upload cancelled' }))
+    xhr.addEventListener('timeout', () => resolve({ success: false, error: 'Upload timed out' }))
+
+    xhr.send(formData)
+  })
+
+  return {
+    promise,
+    abort: () => {
+      try { xhr?.abort() } catch {}
+    },
+  }
+}
+
 export async function getCreatorStats(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/creator/stats`, {
