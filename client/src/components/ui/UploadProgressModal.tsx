@@ -37,10 +37,12 @@ interface Props {
   fileName?: string
   onCancel?: () => void
   error?: string | null
+  isComplete?: boolean
 }
 
-export default function UploadProgressModal({ open, progress, fileName, onCancel, error }: Props) {
+export default function UploadProgressModal({ open, progress, fileName, onCancel, error, isComplete }: Props) {
   const pct = progress?.pct ?? 0
+  const showComplete = isComplete && pct >= 100
   return (
     <AnimatePresence>
       {open && (
@@ -56,53 +58,98 @@ export default function UploadProgressModal({ open, progress, fileName, onCancel
             exit={{ scale: 0.96, opacity: 0, y: 8 }}
             className="w-full max-w-md bg-surface-container-high border border-white/10 rounded-2xl p-6 shadow-2xl"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-primary-container/20 flex items-center justify-center">
-                <Icon name="cloud_upload" className="text-primary-container" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-on-surface">Uploading your film</p>
-                <p className="text-xs text-on-surface-variant/60 truncate">{fileName || 'Preparing…'}</p>
-              </div>
-              {onCancel && (
-                <button onClick={onCancel} className="text-on-surface-variant hover:text-on-surface p-1" aria-label="Cancel upload">
-                  <Icon name="close" />
-                </button>
-              )}
-            </div>
+            {showComplete ? (
+              <>
+                <div className="flex flex-col items-center text-center py-2">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 12, mass: 0.8 }}
+                    className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 10, delay: 0.15 }}
+                    >
+                      <Icon name="check_circle" className="w-10 h-10 text-green-400" fill />
+                    </motion.div>
+                  </motion.div>
+                  <motion.p
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.3 }}
+                    className="text-lg font-bold text-on-surface"
+                  >
+                    Upload complete!
+                  </motion.p>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.45, duration: 0.3 }}
+                    className="text-sm text-on-surface-variant/60 mt-1"
+                  >
+                    {fileName || 'Your video'} has been uploaded
+                  </motion.p>
+                </div>
+                <div className="h-3 rounded-full bg-white/10 overflow-hidden mt-4">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }} />
+                </div>
+                <div className="flex items-center justify-center mt-3 text-xs">
+                  <span className="font-mono font-semibold text-green-400">100%</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary-container/20 flex items-center justify-center">
+                    <Icon name="cloud_upload" className="text-primary-container" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-on-surface">Uploading your film</p>
+                    <p className="text-xs text-on-surface-variant/60 truncate">{fileName || 'Preparing…'}</p>
+                  </div>
+                  {onCancel && (
+                    <button onClick={onCancel} className="text-on-surface-variant hover:text-on-surface p-1" aria-label="Cancel upload">
+                      <Icon name="close" />
+                    </button>
+                  )}
+                </div>
 
-            <div className="h-3 rounded-full bg-white/10 overflow-hidden">
-              <motion.div
-                className="h-full bg-primary-container rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.max(pct, 2)}%` }}
-                transition={{ duration: 0.2 }}
-              />
-            </div>
+                <div className="h-3 rounded-full bg-white/10 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary-container rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.max(pct, 2)}%` }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </div>
 
-            <div className="flex items-center justify-between mt-3 text-xs">
-              <span className="font-mono font-semibold text-primary-container">{pct}%</span>
-              <span className="text-on-surface-variant/60">
-                {progress ? `${fmtBytes(progress.loaded)} / ${fmtBytes(progress.total)}` : '—'}
-              </span>
-            </div>
+                <div className="flex items-center justify-between mt-3 text-xs">
+                  <span className="font-mono font-semibold text-primary-container">{pct}%</span>
+                  <span className="text-on-surface-variant/60">
+                    {progress ? `${fmtBytes(progress.loaded)} / ${fmtBytes(progress.total)}` : '—'}
+                  </span>
+                </div>
 
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="bg-white/5 rounded-xl px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">Speed</p>
-                <p className="text-sm font-mono font-semibold text-on-surface mt-1">{progress ? fmtSpeed(progress.speedBps) : '—'}</p>
-              </div>
-              <div className="bg-white/5 rounded-xl px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">ETA</p>
-                <p className="text-sm font-mono font-semibold text-on-surface mt-1">{fmtEta(progress?.etaSec ?? null)}</p>
-              </div>
-              <div className="bg-white/5 rounded-xl px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">Elapsed</p>
-                <p className="text-sm font-mono font-semibold text-on-surface mt-1">
-                  {progress ? `${Math.floor(progress.elapsedSec)}s` : '—'}
-                </p>
-              </div>
-            </div>
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="bg-white/5 rounded-xl px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">Speed</p>
+                    <p className="text-sm font-mono font-semibold text-on-surface mt-1">{progress ? fmtSpeed(progress.speedBps) : '—'}</p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">ETA</p>
+                    <p className="text-sm font-mono font-semibold text-on-surface mt-1">{fmtEta(progress?.etaSec ?? null)}</p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">Elapsed</p>
+                    <p className="text-sm font-mono font-semibold text-on-surface mt-1">
+                      {progress ? `${Math.floor(progress.elapsedSec)}s` : '—'}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
 
             {error && (
               <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">

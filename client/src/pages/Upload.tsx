@@ -164,11 +164,14 @@ export default function Upload() {
     if (file?.type.startsWith('video/')) setVideoFile(file)
   }, [])
 
+  const [uploadComplete, setUploadComplete] = useState(false)
+
   const cancelUpload = () => {
     uploadAbortRef.current?.()
     setUploading(false)
     setUploadProgress(null)
     setUploadError(null)
+    setUploadComplete(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -178,6 +181,7 @@ export default function Upload() {
       return
     }
     setUploading(true)
+    setUploadComplete(false)
     setUploadProgress({ loaded: 0, total: videoFile?.size || 0, pct: 0, speedBps: 0, etaSec: null, elapsedSec: 0 })
     setUploadError(null)
     const token = localStorage.getItem('novaflix-token') || ''
@@ -195,12 +199,20 @@ export default function Upload() {
     uploadAbortRef.current = abort
     const res = await promise
     uploadAbortRef.current = null
-    setUploading(false)
-    setUploadProgress(null)
     if (res.success) {
+      // Show 100% check animation for 1000ms before morphing to success
+      setUploadProgress((prev) => prev ? { ...prev, pct: 100, loaded: prev.total } : { loaded: 0, total: 0, pct: 100, speedBps: 0, etaSec: null, elapsedSec: 0 })
+      setUploadComplete(true)
+      await new Promise((r) => setTimeout(r, 1000))
+      setUploadComplete(false)
+      setUploading(false)
+      setUploadProgress(null)
       setUploadId(res.upload?.id || '')
       setUploaded(true)
     } else {
+      setUploading(false)
+      setUploadProgress(null)
+      setUploadComplete(false)
       if (res.status === 429) {
         const secs = res.retryAfter ?? 30
         toast.error(res.error || `Too many uploads in progress. Retry in ${secs}s`)
@@ -259,38 +271,49 @@ export default function Upload() {
     return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
-  if (uploaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-20 h-20 rounded-full bg-primary-container/20 flex items-center justify-center mx-auto mb-6">
-            <Icon name="check_circle" className="w-10 h-10 text-primary-container" />
-          </div>
-          <h1 className="text-headline-md font-bold mb-3">Uploaded Successfully!</h1>
-          <p className="text-on-surface-variant mb-2">Your film is being processed.</p>
-          <p className="text-on-surface-variant/60 text-sm mb-8">It will be reviewed and published within 24 hours.</p>
-          <div className="flex items-center justify-center gap-3">
-            <Button onClick={() => setShowEggModal(true)} variant="secondary">
-              <Icon name="vpn_key" size="sm" className="mr-2" />
-              Add Hidden Key
-            </Button>
-            <Button onClick={() => setUploaded(false)}>Upload Another</Button>
-          </div>
-          <p className="text-on-surface-variant/40 text-xs mt-6">
-            Tip: hide a digital key at a memorable moment to unlock badges & secret rooms for your fans.
-          </p>
-        </motion.div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-2xl mx-auto">
+        <AnimatePresence mode="wait">
+          {uploaded ? (
+            <motion.div
+              key="uploaded-success"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="text-center py-12"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 12, delay: 0.1 }}
+                className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6"
+              >
+                <Icon name="check_circle" className="w-10 h-10 text-green-400" fill />
+              </motion.div>
+              <h1 className="text-headline-md font-bold mb-3">Uploaded Successfully!</h1>
+              <p className="text-on-surface-variant mb-2">Your film is being processed.</p>
+              <p className="text-on-surface-variant/60 text-sm mb-8">It will be reviewed and published within 24 hours.</p>
+              <div className="flex items-center justify-center gap-3">
+                <Button onClick={() => setShowEggModal(true)} variant="secondary">
+                  <Icon name="vpn_key" size="sm" className="mr-2" />
+                  Add Hidden Key
+                </Button>
+                <Button onClick={() => { setUploaded(false); setTitle(''); setDescription(''); setGenre(''); setVideoFile(null); setPosterFile(null) }}>Upload Another</Button>
+              </div>
+              <p className="text-on-surface-variant/40 text-xs mt-6">
+                Tip: hide a digital key at a memorable moment to unlock badges & secret rooms for your fans.
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="upload-form"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
         <div className="flex items-center gap-3 mb-6">
           <Icon name="cloud_upload" className="w-8 h-8 text-primary-container" />
           <div>
@@ -558,6 +581,9 @@ export default function Upload() {
             Your film will be reviewed before publishing.
           </p>
         </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Modal isOpen={showEggModal} onClose={() => setShowEggModal(false)} title="Add a Hidden Key">
@@ -685,6 +711,7 @@ export default function Upload() {
         fileName={videoFile?.name}
         onCancel={cancelUpload}
         error={uploadError}
+        isComplete={uploadComplete}
       />
     </div>
   )
