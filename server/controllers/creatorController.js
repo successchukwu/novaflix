@@ -200,6 +200,7 @@ export async function getCreatorComments(req, res) {
 
 export async function getPublicCreators(req, res) {
   try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 8, 1), 8)
     const { rows } = await pool.query(
       `SELECT u.id, u.name, u.avatar, u.bio,
               cp.known_for_department,
@@ -207,11 +208,12 @@ export async function getPublicCreators(req, res) {
               (SELECT COALESCE(SUM(views), 0)::bigint FROM uploads WHERE user_id = u.id AND status = 'active') as total_views,
               (SELECT COUNT(*)::int FROM likes WHERE creator_id = u.id) as total_likes,
               (SELECT COUNT(*)::int FROM followers WHERE following_id = u.id) as followers_count
-       FROM users u
-       LEFT JOIN creator_profiles cp ON cp.user_id = u.id
-       WHERE u.role = 'creator'
-       ORDER BY followers_count DESC, u.created_at DESC
-       LIMIT 20`
+        FROM users u
+        LEFT JOIN creator_profiles cp ON cp.user_id = u.id
+        WHERE u.role = 'creator'
+        ORDER BY (u.avatar IS NOT NULL AND u.avatar <> '') DESC, followers_count DESC, u.created_at DESC
+        LIMIT $1`,
+      [limit]
     )
     res.json({ success: true, creators: rows })
   } catch (err) {

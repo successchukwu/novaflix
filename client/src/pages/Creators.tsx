@@ -1,108 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import Icon from '../components/ui/Icon'
-import SEOMeta from '../components/ui/SEOMeta'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
 import { getPublicCreators } from '../lib/api'
-import Perspective3DGridBackdrop from '../components/features/Perspective3DGridBackdrop'
-import { formatCurrency } from '../lib/currency'
-
-const fadeUp = {
-  initial: { opacity: 0, y: 40 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: '-80px' },
-  transition: { duration: 0.6 },
-}
-
-const stagger = {
-  initial: { opacity: 0, y: 30 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { staggerChildren: 0.1, delayChildren: 0.2 },
-}
-
-const benefits = [
-  { icon: 'attach_money' as const, title: 'Monetize Your Work', desc: 'Earn from subscriptions, tips, pay-per-view, memberships, and merch — all from one dashboard.' },
-  { icon: 'group' as const, title: 'Build Your Audience', desc: 'Reach viewers worldwide. Turn casual watchers into superfans with follower tools and leaderboards.' },
-  { icon: 'bar_chart' as const, title: 'Real-Time Analytics', desc: 'Track views, watch minutes, engagement, and revenue the moment they happen.' },
-  { icon: 'shield' as const, title: 'Full Creative Control', desc: 'You own your content. Set your own prices, schedule releases, and choose where it plays.' },
-  { icon: 'language' as const, title: 'Global Distribution', desc: 'Your films reach audiences across 190+ countries with instant subtitles and localization.' },
-  { icon: 'trending_up' as const, title: 'Smart Recommendations', desc: 'Our engine puts your content in front of the right audience at exactly the right time.' },
-]
-
-const steps = [
-  { num: '01', title: 'Create Your Account', desc: 'Sign up as a creator in minutes. No upfront fees, no contracts.' },
-  { num: '02', title: 'Upload Your Film', desc: 'Drag and drop your masterpiece. We handle encoding, hosting, and delivery.' },
-  { num: '03', title: 'Set Your Terms', desc: 'Choose free, premium, or pay-per-view. You decide how to monetize.' },
-  { num: '04', title: 'Connect & Earn', desc: 'Share with your audience, track your earnings, and withdraw anytime.' },
-]
-
-const plans = [
-  { id: 'student', name: 'Student', price: 800, period: '/month', features: ['720p HD streaming', 'Basic analytics', '1 download device'] },
-  { id: 'basic', name: 'Basic', price: 1500, period: '/month', features: ['720p HD streaming', 'Basic analytics', 'Priority support'] },
-  { id: 'standard', name: 'Standard', price: 2500, period: '/month', featured: true, features: ['1080p Full HD', 'Advanced analytics', 'Early access to features', 'Ad-free experience'] },
-  { id: 'premium', name: 'Premium', price: 5500, period: '/month', features: ['4K HDR streaming', 'Full analytics suite', 'Watch parties & premieres', 'Spatial audio'] },
-]
-
-const faqs = [
-  { q: 'Is it free to join NovaFlix as a creator?', a: 'Creating your account is completely free. To publish content you pick an affordable plan — starting at ₦800/month — which covers hosting, encoding, distribution, and your full creator toolkit. No hidden fees.' },
-  { q: 'How do I get paid?', a: 'You earn from tips, subscriptions, pay-per-view, memberships, and store sales. Everything lands in your creator wallet in real time, and you can withdraw anytime through supported payment gateways.' },
-  { q: 'Who owns my content?', a: 'You do — always. NovaFlix is purely a distribution platform. You keep 100% ownership of your films and full control over pricing, availability, and territories.' },
-  { q: 'Can I manage everything from my phone?', a: 'Yes. Upload, review analytics, reply to fans, and track earnings from any mobile browser or our mobile apps. Start a cut on your phone, finish on desktop — everything syncs.' },
-  { q: 'What kind of content can I publish?', a: 'Feature films, shorts, series, docs, music videos — anything original you have the rights to. Our team reviews uploads for quality so viewers always get the best experience.' },
-]
-
-const navLinks = [
-  { label: 'Features', href: '#features' },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Creators', href: '#featured-creators' },
-  { label: 'Pricing', href: '#pricing' },
-  { label: 'FAQ', href: '#faq' },
-]
+import Icon from '../components/ui/Icon'
+import SEOMeta from '../components/ui/SEOMeta'
 
 function safeCount(v: unknown): string {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString() : '0'
-}
-
-function CreatorCard({ creator: c, onOpen }: { creator: any; onOpen: () => void }) {
-  const [imgError, setImgError] = useState(false)
-  const showImg = c.avatar && !imgError
-  return (
-    <motion.div
-      variants={{ initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 } }}
-      whileHover={{ y: -4 }}
-      onClick={onOpen}
-      className="group cursor-pointer"
-    >
-      <div className="aspect-[3/4] bg-surface-container-high border border-white/5 rounded-xl overflow-hidden mb-3 relative">
-        {showImg ? (
-          <img
-            src={c.avatar}
-            alt={c.name}
-            loading="lazy"
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-primary-container/10">
-            <Icon name="videocam" className="w-8 h-8 text-primary-container/40" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-          <div className="flex items-center gap-2 text-xs text-white">
-            <Icon name="star" fill={true} className="text-primary-container" /> {safeCount(c.total_likes)} likes
-          </div>
-        </div>
-      </div>
-      <p className="font-label-md text-label-md text-on-surface truncate">{c.name}</p>
-      <p className="text-on-surface-variant/60 text-sm truncate">{c.known_for_department || 'Filmmaker'}</p>
-      <p className="text-xs text-primary mt-1 inline-flex items-center gap-1">
-        <Icon name="group" className="w-3.5 h-3.5" /> {safeCount(c.followers_count)} followers
-      </p>
-    </motion.div>
-  )
 }
 
 export default function Creators() {
@@ -112,9 +18,16 @@ export default function Creators() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [activeFaq, setActiveFaq] = useState<number | null>(0)
 
   const authedCreator = !!(user && isCreator)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 30)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -122,7 +35,7 @@ export default function Creators() {
     let attempt = 0
     async function load() {
       try {
-        const r = await getPublicCreators(controller.signal)
+        const r = await getPublicCreators(controller.signal, 8)
         if (cancelled) return
         if (r.success) {
           setCreators(Array.isArray(r.creators) ? r.creators : [])
@@ -136,418 +49,470 @@ export default function Creators() {
         }
       } catch (e: any) {
         if (cancelled || e?.name === 'AbortError') return
-        if (++attempt <= 1) {
-          setTimeout(load, 1200)
-        } else {
-          setError('Failed to connect to server')
-          setLoading(false)
-        }
+        if (++attempt <= 1) setTimeout(load, 1200)
+        else { setError('Failed to connect to server'); setLoading(false) }
       }
     }
     load()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
+    return () => { cancelled = true; controller.abort() }
   }, [])
 
-  function retryLoad() {
-    setLoading(true)
-    setError(null)
-    getPublicCreators().then(r => {
-      if (r.success) setCreators(Array.isArray(r.creators) ? r.creators : [])
-      else setError(r.error || 'Could not load creators')
-      setLoading(false)
-    }).catch(() => {
-      setError('Failed to connect to server')
-      setLoading(false)
-    })
+  const handleBecomeCreator = () => {
+    if (authedCreator) navigate('/creator')
+    else navigate('/creator/signup')
   }
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  const signupTo = '/creator/signup'
-
-  function CtaButtons({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
-    const pad = size === 'lg' ? 'px-8 py-3.5 text-base' : 'px-5 py-2.5 text-sm'
-    return (
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        {authedCreator ? (
-          <Link to="/creator" className={`px-8 py-3.5 bg-primary-container text-on-primary-container rounded-xl font-semibold ${size === 'lg' ? 'text-lg' : ''} hover:brightness-110 transition-all inline-flex items-center justify-center gap-2 shadow-lg shadow-primary-container/25`}>
-            Go to Dashboard <Icon name="arrow_forward" />
-          </Link>
-        ) : (
-          <>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Link to={signupTo} className={`inline-flex items-center justify-center gap-2 ${pad} bg-primary-container text-on-primary-container rounded-xl font-semibold hover:brightness-110 transition-all shadow-lg shadow-primary-container/30`}>
-                Start Creating Free <Icon name="arrow_forward" />
-              </Link>
-            </motion.div>
-            <Link to="/login" className={`inline-flex items-center justify-center gap-2 ${pad} bg-surface-variant/20 text-on-surface rounded-xl font-semibold hover:bg-surface-variant/40 transition-colors border border-outline/20`}>
-              Log In
-            </Link>
-          </>
-        )}
-      </div>
-    )
+  const handleJoin = () => handleBecomeCreator()
+  const scrollTo = (id: string) => {
+    setMobileOpen(false)
+    document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
-    <div className="min-h-screen bg-surface text-white">
-      <SEOMeta type="page" title="NovaFlix for Creators — Publish. Grow. Get Paid." description="Upload your films, build a fanbase, and earn from day one. NovaFlix gives filmmakers the stage they deserve." />
+    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', background: '#050505', color: '#fff', overflowX: 'hidden' }}>
+      <SEOMeta type="page" title="NovaFlix for Creators — Create. Reach. Earn." description="NovaFlix for Creators — Publish your films, grow your audience, connect with fans and earn from your creativity." />
+      <style>{`
+        *{margin:0;padding:0;box-sizing:border-box} html{scroll-behavior:smooth} a{color:inherit;text-decoration:none} button{font-family:inherit}
+        :root{--red:#ff1a1a;--dark-red:#9d0000;--gold:#f5c542;--white:#fff;--gray:#a7a7a7;--card:#111;--border:rgba(255,255,255,0.10)}
+        .c-container{width:min(1280px,92%);margin:auto}
+        .c-creators-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+        .c-creator-card{border-radius:20px!important}
+        .c-creator-card-inner{padding:16px 14px!important}
+        .c-creator-title{font-size:16px!important}
+        .c-creator-meta{font-size:13px!important}
+        .c-section{padding:100px 0}
+        .c-label{display:inline-block;color:var(--red);font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:15px}
+        .c-title{font-size:clamp(35px,5vw,65px);line-height:1.05;font-weight:900;max-width:850px;margin-bottom:20px}
+        .c-desc{color:#aaa;font-size:18px;line-height:1.7;max-width:700px}
+        .c-red{color:var(--red)} .c-gold{color:var(--gold)}
+        .c-navbar{position:fixed;top:0;left:0;width:100%;height:76px;z-index:999;display:flex;align-items:center;transition:0.3s}
+        .c-navbar.scrolled{background:rgba(5,5,5,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+        .c-nav-inner{width:min(1200px,92%);margin:auto;display:flex;justify-content:space-between;align-items:center}
+        .c-logo{font-size:25px;font-weight:900;letter-spacing:-1px}
+        .c-logo span{color:var(--red)}
+        .c-nav-links{display:flex;gap:32px;align-items:center}
+        .c-nav-links a{color:#ddd;font-size:14px;transition:0.3s}
+        .c-nav-links a:hover{color:#fff}
+        .c-nav-btn{padding:12px 21px;border-radius:30px;background:#fff;color:#000!important;font-weight:800}
+        .c-nav-btn:hover{background:var(--red);color:#fff!important}
+        .c-menu-btn{display:none;width:42px;height:42px;border:1px solid var(--border);border-radius:50%;background:transparent;color:#fff;font-size:22px;cursor:pointer}
+        .c-hero{min-height:100vh;position:relative;display:flex;align-items:center;overflow:hidden;background:radial-gradient(circle at 75% 35%, rgba(255,0,0,0.22), transparent 30%),radial-gradient(circle at 20% 80%, rgba(150,0,0,0.16), transparent 30%),#050505}
+        .c-hero::before{content:"";position:absolute;width:600px;height:600px;right:-250px;top:100px;border-radius:50%;background:rgba(255,0,0,0.08);filter:blur(80px)}
+        .c-hero-inner{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr 0.95fr;gap:50px;align-items:center;padding-top:80px}
+        .c-hero-content h1{font-size:clamp(48px,7vw,86px);line-height:0.98;font-weight:900;letter-spacing:-4px;margin-bottom:28px}
+        .c-hero-content p{color:#b5b5b5;max-width:600px;font-size:19px;line-height:1.7;margin-bottom:35px}
+        .c-hero-btns{display:flex;flex-wrap:wrap;gap:14px}
+        .c-primary,.c-secondary{border:none;cursor:pointer;padding:16px 26px;border-radius:30px;font-size:15px;font-weight:800;transition:0.3s}
+        .c-primary{background:var(--red);color:#fff;box-shadow:0 10px 40px rgba(255,0,0,0.25)}
+        .c-primary:hover{transform:translateY(-3px);background:#ff3030}
+        .c-secondary{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff}
+        .c-secondary:hover{background:#fff;color:#000}
+        .c-hero-note{margin-top:22px;color:#777;font-size:13px}
+        .c-preview{position:relative;min-height:530px;display:flex;align-items:center;justify-content:center}
+        .c-dashboard{width:100%;max-width:520px;background:#101010;border:1px solid rgba(255,255,255,0.12);border-radius:22px;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,0.7),0 0 80px rgba(255,0,0,0.12);transform:rotate(2deg);animation:cFloating 5s ease-in-out infinite}
+        @keyframes cFloating{0%,100%{transform:translateY(0) rotate(2deg)}50%{transform:translateY(-12px) rotate(2deg)}}
+        .c-dash-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+        .c-dash-profile{display:flex;align-items:center;gap:12px}
+        .c-avatar{width:45px;height:45px;border-radius:50%;background:linear-gradient(135deg,#ff0000,#520000);display:flex;justify-content:center;align-items:center;font-weight:900}
+        .c-dash-profile strong{font-size:14px}
+        .c-dash-profile small{display:block;color:#777;margin-top:4px}
+        .c-verified{color:#ff3b3b}
+        .c-analytics-card{background:#181818;border-radius:15px;padding:20px;margin-bottom:15px}
+        .c-analytics-title{display:flex;justify-content:space-between;color:#aaa;font-size:13px;margin-bottom:15px}
+        .c-big-number{font-size:35px;font-weight:900;margin-bottom:10px}
+        .c-chart{height:90px;display:flex;align-items:end;gap:7px}
+        .c-bar{flex:1;background:linear-gradient(to top,#750000,#ff2525);border-radius:5px 5px 0 0;min-height:15px}
+        .c-dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .c-small-stat{padding:15px;background:#181818;border-radius:12px}
+        .c-small-stat span{display:block;color:#777;font-size:11px;margin-bottom:7px}
+        .c-small-stat strong{font-size:19px}
+        .c-trust{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:30px 0;background:#090909}
+        .c-trust-inner{display:flex;justify-content:space-between;align-items:center;gap:30px;flex-wrap:wrap}
+        .c-trust-item{color:#777;font-size:13px;text-transform:uppercase;letter-spacing:1px}
+        .c-trust-item strong{display:block;color:#fff;font-size:20px;margin-top:5px;text-transform:none;letter-spacing:0}
+        .c-features{background:#080808}
+        .c-feature-grid{margin-top:55px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+        .c-feature-card{padding:32px;min-height:270px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(145deg,#121212,#0b0b0b);transition:0.35s;position:relative;overflow:hidden}
+        .c-feature-card:hover{transform:translateY(-8px);border-color:rgba(255,0,0,0.4)}
+        .c-feature-icon{width:55px;height:55px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:rgba(255,0,0,0.12);color:var(--red);font-size:25px;margin-bottom:25px}
+        .c-feature-card h3{font-size:22px;margin-bottom:13px}
+        .c-feature-card p{color:#888;line-height:1.7;font-size:15px}
+        .c-earn{background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,.95)),radial-gradient(circle at 70% 50%, #670000, #050505 55%)}
+        .c-earn-layout{display:grid;grid-template-columns:0.9fr 1.1fr;gap:80px;align-items:center}
+        .c-earn-visual{position:relative;min-height:480px;display:flex;justify-content:center;align-items:center}
+        .c-money-card{width:320px;padding:35px;border-radius:25px;background:linear-gradient(145deg,#161616,#090909);border:1px solid rgba(255,255,255,.13);box-shadow:0 30px 80px rgba(0,0,0,.6);transform:rotate(-5deg)}
+        .c-money-card small{color:#777}
+        .c-money-card h3{font-size:45px;margin:18px 0}
+        .c-money-line{height:7px;border-radius:10px;background:#242424;overflow:hidden;margin-bottom:15px}
+        .c-money-line span{display:block;height:100%;width:78%;background:linear-gradient(90deg,#8b0000,#ff3030)}
+        .c-earning-badge{position:absolute;right:5%;top:10%;background:#fff;color:#000;padding:18px;border-radius:15px;font-size:13px;font-weight:800;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+        .c-earning-list{margin-top:35px}
+        .c-earning-item{display:flex;gap:18px;margin-bottom:27px}
+        .c-check{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(255,0,0,.15);color:#ff3030;display:flex;align-items:center;justify-content:center;font-weight:900}
+        .c-earning-item h4{margin-bottom:6px;font-size:17px}
+        .c-earning-item p{color:#858585;line-height:1.6;font-size:14px}
+        .c-analytics{background:#050505}
+        .c-analytics-showcase{margin-top:60px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+        .c-analytics-large{background:#101010;border:1px solid var(--border);border-radius:22px;padding:30px;min-height:390px}
+        .c-analytics-large h3{font-size:20px;margin-bottom:10px}
+        .c-analytics-large p{color:#777;font-size:14px;line-height:1.6}
+        .c-line-chart{margin-top:50px;height:190px;display:flex;align-items:end;gap:8px}
+        .c-line-bar{flex:1;background:linear-gradient(to top,#3c0000,#ff3030);border-radius:5px 5px 0 0}
+        .c-audience-box{margin-top:35px}
+        .c-audience-row{display:flex;justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--border);color:#aaa}
+        .c-audience-row strong{color:#fff}
+        .c-promote{background:#090909}
+        .c-promote-layout{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center}
+        .c-phone{width:300px;height:570px;margin:auto;padding:12px;background:#111;border:1px solid #333;border-radius:40px;box-shadow:0 30px 70px rgba(0,0,0,.7)}
+        .c-phone-screen{height:100%;border-radius:30px;overflow:hidden;position:relative;background:linear-gradient(to bottom,transparent 45%,rgba(0,0,0,.95)),linear-gradient(145deg,#6e0000,#170000)}
+        .c-movie-poster{position:absolute;inset:0;opacity:.8;background:radial-gradient(circle at 50% 35%,#ff5a00,transparent 15%),linear-gradient(145deg,#1d1d1d,#720000)}
+        .c-phone-content{position:absolute;bottom:30px;left:20px;right:20px}
+        .c-promoted-label{display:inline-block;padding:6px 10px;border-radius:20px;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);font-size:11px;margin-bottom:10px}
+        .c-phone-content h3{font-size:25px;margin-bottom:8px}
+        .c-phone-content p{color:#ddd;font-size:12px;line-height:1.5;margin-bottom:15px}
+        .c-watch-btn{display:inline-block;background:#fff;color:#000;padding:11px 18px;border-radius:20px;font-size:12px;font-weight:800}
+        .c-community{background:radial-gradient(circle at 50% 0%,rgba(255,0,0,.13),transparent 35%),#050505;text-align:center}
+        .c-community .c-desc{margin:auto}
+        .c-community-grid{margin-top:60px;display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+        .c-community-card{padding:30px 20px;background:#101010;border:1px solid var(--border);border-radius:18px}
+        .c-community-number{font-size:35px;font-weight:900;color:var(--red);margin-bottom:8px}
+        .c-community-card h4{margin-bottom:8px}
+        .c-community-card p{color:#777;font-size:13px;line-height:1.5}
+        .c-journey{background:#090909}
+        .c-journey-grid{margin-top:60px;display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+        .c-journey-card{position:relative;padding:28px;border-top:2px solid #4b0000;background:#101010;border-radius:0 0 18px 18px}
+        .c-journey-number{color:var(--red);font-size:12px;font-weight:900;margin-bottom:20px}
+        .c-journey-card h3{margin-bottom:12px}
+        .c-journey-card p{color:#777;line-height:1.6;font-size:14px}
+        .c-quote{padding:100px 0;text-align:center;background:#050505}
+        .c-quote-text{max-width:850px;margin:auto;font-size:clamp(30px,5vw,55px);line-height:1.1;font-weight:900;letter-spacing:-2px}
+        .c-quote-text span{color:var(--red)}
+        .c-faq{background:#090909}
+        .c-faq-container{max-width:850px;margin:55px auto 0}
+        .c-faq-item{border-bottom:1px solid var(--border)}
+        .c-faq-q{width:100%;padding:25px 0;background:transparent;border:none;color:#fff;display:flex;justify-content:space-between;text-align:left;font-size:17px;font-weight:700;cursor:pointer}
+        .c-faq-a{color:#888;line-height:1.7;padding-bottom:25px;font-size:14px}
+        .c-faq-icon{font-size:22px;transition:.3s}
+        .c-faq-item.active .c-faq-icon{transform:rotate(45deg);color:var(--red)}
+        .c-final{padding:120px 0;text-align:center;background:radial-gradient(circle at center,rgba(255,0,0,.2),transparent 45%),#050505}
+        .c-final h2{font-size:clamp(45px,7vw,80px);line-height:1;font-weight:900;letter-spacing:-3px;max-width:900px;margin:auto auto 25px}
+        .c-final p{max-width:600px;margin:auto auto 35px;color:#999;line-height:1.7}
+        footer.c-footer{border-top:1px solid var(--border);padding:60px 0 30px;background:#030303}
+        .c-footer-grid{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:40px;margin-bottom:60px}
+        .c-footer-brand p{color:#777;line-height:1.7;font-size:14px;max-width:300px;margin-top:15px}
+        .c-footer-col h4{margin-bottom:20px;font-size:14px}
+        .c-footer-col a{display:block;color:#777;font-size:13px;margin-bottom:13px;transition:.3s}
+        .c-footer-col a:hover{color:#fff}
+        .c-footer-bottom{border-top:1px solid var(--border);padding-top:25px;display:flex;justify-content:space-between;color:#555;font-size:12px}
+        @media (max-width: 900px){
+          .c-nav-links{position:absolute;top:70px;left:4%;width:92%;padding:20px;background:#101010;border:1px solid var(--border);border-radius:18px;display:none;flex-direction:column;align-items:stretch}
+          .c-nav-links.active{display:flex}
+          .c-nav-btn{text-align:center}
+          .c-menu-btn{display:block}
+          .c-hero-inner,.c-earn-layout,.c-promote-layout{grid-template-columns:1fr}
+          .c-hero{padding-bottom:70px}
+          .c-hero-content{text-align:center}
+          .c-hero-content p{margin-left:auto;margin-right:auto}
+          .c-hero-btns{justify-content:center}
+          .c-preview{min-height:auto}
+          .c-feature-grid{grid-template-columns:repeat(2,1fr)}
+          .c-analytics-showcase{grid-template-columns:1fr}
+          .c-community-grid,.c-journey-grid{grid-template-columns:repeat(2,1fr)}
+          .c-footer-grid{grid-template-columns:1fr 1fr}
+        }
+        @media (max-width: 600px){
+          .c-section{padding:75px 0}
+          .c-hero-content h1{font-size:52px;letter-spacing:-3px}
+          .c-hero-content p{font-size:16px}
+          .c-dashboard{transform:none;padding:14px;animation:none}
+          .c-feature-grid,.c-community-grid,.c-journey-grid{grid-template-columns:1fr}
+          .c-dash-grid{grid-template-columns:1fr 1fr}
+          .c-earn-visual{min-height:390px}
+          .c-money-card{width:280px}
+          .c-earning-badge{right:0;top:5%}
+          .c-phone{width:270px;height:520px}
+          .c-footer-grid{grid-template-columns:1fr}
+          .c-footer-bottom{flex-direction:column;gap:10px}
+          .c-primary,.c-secondary{width:100%}
+        }
+        .c-creators-grid{grid-template-columns:repeat(4,1fr)!important;gap:22px!important}
+        @media (max-width: 768px){ .c-creators-grid{grid-template-columns:repeat(2,1fr)!important} }
+        @media (max-width: 480px){ .c-creators-grid{grid-template-columns:1fr!important} }
+      `}</style>
 
-      {/* Nav */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b ${scrolled ? 'bg-surface/85 backdrop-blur-xl border-white/10' : 'bg-transparent border-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 hover:scale-105 transition-transform">
-            <img src="/leter-mark-logo.png" alt="" className="h-10 w-auto" />
-          </Link>
-          <div className="hidden lg:flex items-center gap-7">
-            {navLinks.map(l => (
-              <a key={l.href} href={l.href} className="text-sm text-on-surface-variant hover:text-primary transition-colors">{l.label}</a>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            {authedCreator ? (
-              <Link to="/creator" className="text-sm bg-primary-container text-on-primary-container px-5 py-2 rounded-full font-medium hover:brightness-110 transition-colors">Dashboard</Link>
+      <header className={`c-navbar ${scrolled ? 'scrolled' : ''}`}>
+        <div className="c-nav-inner">
+          <a onClick={() => navigate('/')} style={{cursor:'pointer'}} className="c-logo">Nova<span>Flix</span></a>
+          <nav className={`c-nav-links ${mobileOpen ? 'active' : ''}`}>
+            <a onClick={() => scrollTo('#features')} style={{cursor:'pointer'}}>Features</a>
+            <a onClick={() => scrollTo('#earn')} style={{cursor:'pointer'}}>Earn</a>
+            <a onClick={() => scrollTo('#analytics')} style={{cursor:'pointer'}}>Analytics</a>
+            <a onClick={() => scrollTo('#promote')} style={{cursor:'pointer'}}>Promote</a>
+            <a onClick={() => scrollTo('#faq')} style={{cursor:'pointer'}}>FAQ</a>
+            <a onClick={handleJoin} style={{cursor:'pointer'}} className="c-nav-btn">{authedCreator ? 'Go to Dashboard' : 'Join NovaFlix'}</a>
+          </nav>
+          <button className="c-menu-btn" onClick={() => setMobileOpen(!mobileOpen)}>{mobileOpen ? '✕' : '☰'}</button>
+        </div>
+      </header>
+
+      <section className="c-hero">
+        <div className="c-container c-hero-inner">
+          <motion.div className="c-hero-content" initial={{opacity:0,y:30}} animate={{opacity:1,y:0}} transition={{duration:0.8}}>
+            <span className="c-label">NOVAFLIX FOR CREATORS</span>
+            <h1>Your story deserves <span className="c-red">an audience.</span></h1>
+            <p>Bring your movies, shorts and ideas to NovaFlix. Build your audience, connect directly with fans, promote your work and earn from your creativity.</p>
+            <div className="c-hero-btns">
+              <motion.button whileHover={{y:-3}} whileTap={{scale:0.98}} onClick={handleBecomeCreator} className="c-primary">Become a Creator →</motion.button>
+              <motion.button whileHover={{y:-2}} onClick={() => scrollTo('#features')} className="c-secondary">Explore Creator Tools</motion.button>
+            </div>
+            <div className="c-hero-note">Built for filmmakers, actors, directors, editors, reviewers and storytellers.</div>
+          </motion.div>
+          <motion.div className="c-preview" initial={{opacity:0, scale:0.9, rotate:2}} animate={{opacity:1, scale:1, rotate:2}} transition={{duration:0.9, delay:0.2}}>
+            <div className="c-dashboard">
+              <div className="c-dash-top">
+                <div className="c-dash-profile"><div className="c-avatar">NF</div><div><strong>Your Creator Studio</strong><small><span className="c-verified">✓</span> Verified Creator</small></div></div>
+                <span className="c-gold">● Live</span>
+              </div>
+              <div className="c-analytics-card">
+                <div className="c-analytics-title"><span>Audience growth</span><span className="c-gold">+24.8%</span></div>
+                <div className="c-big-number">128,420</div>
+                <div className="c-chart">{[30,45,38,55,65,72,88,100].map((h,i)=><motion.div key={i} className="c-bar" initial={{height:0}} whileInView={{height:`${h}%`}} viewport={{once:true}} transition={{delay: i*0.08, duration:0.6}} />)}</div>
+              </div>
+              <div className="c-dash-grid">
+                <div className="c-small-stat"><span>WATCH TIME</span><strong>2.4M</strong></div>
+                <div className="c-small-stat"><span>FOLLOWERS</span><strong>{loading ? '—' : safeCount(creators.length ? creators.reduce((a,c)=>a+(Number(c.followers_count)||0),0) : 48700)}</strong></div>
+                <div className="c-small-stat"><span>RELEASES</span><strong>18</strong></div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="c-trust">
+        <div className="c-container c-trust-inner">
+          {[
+            {k:'Filmmakers', v:'Stories that move'},
+            {k:'Creators', v:'Ideas to screen'},
+            {k:'Storytellers', v:'Voices amplified'},
+            {k:'Film Communities', v:'Audiences worldwide'},
+          ].map(item=>(
+            <div key={item.k} className="c-trust-item">Built for<strong>{item.k}</strong></div>
+          ))}
+        </div>
+      </section>
+
+      <motion.section id="featured-creators" className="c-section" style={{background:'#080808', textAlign:'center'}} initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}} transition={{duration:0.6}}>
+        <div className="c-container">
+          <span className="c-label">Featured Creators</span>
+          <h2 className="c-title" style={{marginLeft:'auto', marginRight:'auto'}}>Meet the creators <span className="c-red">shaping NovaFlix.</span></h2>
+          <p className="c-desc" style={{margin:'auto'}}>Real filmmakers, real audiences — live from the database.</p>
+          <div style={{marginTop:40, minHeight:120}}>
+            {loading ? (
+              <div className="c-creators-grid" style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:22}}>
+                {Array.from({length:8}).map((_,i)=><div key={i} style={{height:400, background:'rgba(255,255,255,0.05)', borderRadius:20}} />)}
+              </div>
+            ) : error ? (
+              <div style={{padding:20}}><p style={{color:'#ff6666', marginBottom:12}}>{error}</p><button onClick={() => window.location.reload()} className="c-secondary" style={{padding:'10px 18px'}}>Retry</button></div>
+            ) : creators.length===0 ? (
+              <p style={{color:'#777', padding:20}}>Be the first creator — your profile will appear here.</p>
             ) : (
-              <>
-                <Link to="/login" className="hidden sm:block text-sm text-on-surface-variant hover:text-on-surface transition-colors">Log In</Link>
-                <Link to={signupTo} className="text-sm bg-primary-container text-on-primary-container px-5 py-2 rounded-full font-medium hover:brightness-110 transition-all hover:scale-105 shadow-[0_0_15px_rgba(229,9,20,0.35)]">Sign Up</Link>
-              </>
+              <motion.div initial="hidden" whileInView="visible" viewport={{once:true}} variants={{hidden:{}, visible:{transition:{staggerChildren:0.07}}}} className="c-creators-grid" style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:22}}>
+                {creators.slice(0,8).map(c=>(
+                  <motion.div key={c.id} variants={{hidden:{opacity:0,y:20}, visible:{opacity:1,y:0}}} whileHover={{y:-6}} onClick={()=>navigate(`/creators/${c.id}`)} style={{cursor:'pointer', background:'#111', border:'1px solid var(--border)', borderRadius:20, overflow:'hidden'}}>
+                    <div style={{aspectRatio:'3/4.2', minHeight:320, background:'#0a0a0a', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden'}}>
+                      <img src={c.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=ff1a1a&color=fff&size=400&bold=true&format=svg`} alt={c.name} loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{ const fb = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=ff1a1a&color=fff&size=400&bold=true&format=svg`; (e.target as HTMLImageElement).src = fb }} />
+                    </div>
+                    <div className="c-creator-card-inner" style={{padding:'16px 14px'}}>
+                      <div className="c-creator-title" style={{fontWeight:800, fontSize:16, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.name}</div>
+                      <div className="c-creator-meta" style={{color:'#777', fontSize:13}}>{c.known_for_department||'Filmmaker'} • {safeCount(c.followers_count)} followers</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
             )}
           </div>
+          <motion.button whileHover={{scale:1.04}} whileTap={{scale:0.97}} onClick={()=>navigate('/creators')} style={{marginTop:30, padding:'12px 22px', borderRadius:30, background:'#fff', color:'#000', fontWeight:800, border:'none', cursor:'pointer'}}>Explore All Creators →</motion.button>
         </div>
-      </nav>
+      </motion.section>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-black">
-        <Perspective3DGridBackdrop />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black z-[1]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary-container/15 via-transparent to-transparent z-[1]" />
-        <div className="relative z-[2] max-w-6xl mx-auto px-4 pt-32 pb-24 md:pt-40 md:pb-32 text-center">
-          <motion.div {...fadeUp}>
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary-container/30 bg-primary-container/10 text-xs font-semibold tracking-widest uppercase text-primary mb-6">
-              <Icon name="movie_filter" className="w-4 h-4" /> NovaFlix for Creators
-            </span>
-            <h1 className="text-headline-lg-mobile md:text-display-md font-bold text-on-surface mb-4 leading-tight">
-              Filmmaking.
-              <br />
-              <span className="bg-gradient-to-r from-primary-container to-secondary bg-clip-text text-transparent">Now playing everywhere.</span>
-            </h1>
-            <p className="text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10">
-              Millions of viewers, one upload away. Publish your films, grow a fanbase,
-              and get paid — no credit card needed to start.
-            </p>
-            <CtaButtons />
-            <p className="text-on-surface-variant/40 text-xs mt-4">Free to join · Keep 100% of your rights · Withdraw anytime</p>
-          </motion.div>
-
-          {/* Editor-style mockup strip */}
-          <motion.div {...fadeUp} transition={{ duration: 0.7, delay: 0.2 }} className="mt-16 max-w-4xl mx-auto relative rounded-xl border border-white/10 bg-surface-container-low overflow-hidden shadow-2xl">
-            <div className="flex items-center px-4 py-2 bg-surface-container-lowest border-b border-white/5">
-              <div className="flex gap-2">
-                <span className="w-3 h-3 rounded-full bg-error" />
-                <span className="w-3 h-3 rounded-full bg-secondary" />
-                <span className="w-3 h-3 rounded-full bg-primary-container" />
-              </div>
-              <span className="mx-auto text-on-surface-variant/60 text-xs font-mono truncate px-4">my_first_premiere.cin</span>
-            </div>
-            <div className="grid grid-cols-12 gap-3 p-4">
-              <div className="col-span-3 hidden md:flex flex-col gap-2">
-                {['B-Roll', 'Soundtrack', 'Master Cuts'].map(a => (
-                  <div key={a} className="flex items-center gap-2 text-xs text-on-surface-variant/70 bg-surface-container-high rounded-lg px-3 py-2">
-                    <Icon name="folder" className="w-3.5 h-3.5" /> {a}
-                  </div>
-                ))}
-              </div>
-              <div className="col-span-12 md:col-span-9 space-y-3">
-                <div className="relative aspect-video rounded-lg overflow-hidden bg-surface-container flex items-center justify-center">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary-container/20 via-transparent to-secondary/10" />
-                  <Icon name="play_circle" className="w-14 h-14 text-white/80" />
-                </div>
-                <div className="h-16 rounded-lg bg-surface-container-lowest border border-white/5 p-2 flex gap-1 relative">
-                  <div className="absolute left-1/3 top-0 bottom-0 w-px bg-primary z-10" />
-                  <div className="w-1/4 self-stretch bg-secondary-container/40 rounded-sm border border-secondary/40" />
-                  <div className="w-1/2 self-stretch ml-2 bg-primary-container/40 rounded-sm border border-primary-container/60" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Stats Bar */}
-      <section className="border-y border-white/5 bg-surface-container-high">
-        <div className="max-w-5xl mx-auto px-4 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          {[
-            { label: 'Active Creators', value: loading ? '—' : `${Math.max(creators.length, 1) * 10}+` },
-            { label: 'Films Uploaded', value: '2,400+' },
-            { label: 'Minutes Streamed', value: '1.2M+' },
-            { label: 'Revenue Paid Out', value: '$50K+' },
-          ].map(s => (
-            <div key={s.label}>
-              <p className="text-2xl font-bold text-on-surface tabular-nums inline-block min-w-[4ch]">{s.value}</p>
-              <p className="text-on-surface-variant/60 text-xs mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="max-w-6xl mx-auto px-4 py-16 md:py-24">
-        <motion.div {...fadeUp} className="text-center mb-14">
-          <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-            Pro Tools. <span className="text-primary-container">Accessible Everywhere.</span>
-          </h2>
-          <p className="text-on-surface-variant max-w-xl mx-auto">
-            Everything you need to succeed as a filmmaker, all in one platform.
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-3 gap-gutter">
-          {benefits.map((b, i) => (
-            <motion.div
-              key={b.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className="bg-surface-container border border-white/5 rounded-xl p-6 hover:border-primary-container/30 hover:shadow-[0_0_20px_rgba(229,9,20,0.15)] transition-all"
-            >
-              <div className="w-11 h-11 rounded-full bg-primary-container/10 flex items-center justify-center mb-4">
-                <Icon name={b.icon} className="text-primary-container" />
-              </div>
-              <h3 className="font-label-md text-label-md text-on-surface mb-2">{b.title}</h3>
-              <p className="text-on-surface-variant text-sm leading-relaxed">{b.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section id="how-it-works" className="bg-surface-container-high border-y border-white/5 py-16 md:py-24">
-        <div className="max-w-6xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-14">
-            <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-              How It <span className="text-primary-container">Works</span>
-            </h2>
-            <p className="text-on-surface-variant max-w-xl mx-auto">Get started in four simple steps.</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-4 gap-6 relative">
-            <div className="hidden md:block absolute top-12 left-[12%] right-[12%] h-px bg-gradient-to-r from-primary-container/40 via-primary-container/20 to-transparent" />
-            {steps.map((s, i) => (
-              <motion.div
-                key={s.num}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.12 }}
-                className="relative text-center"
-              >
-                <div className="w-12 h-12 rounded-full bg-primary-container text-on-primary-container font-bold text-lg flex items-center justify-center mx-auto mb-4 relative z-10">{s.num}</div>
-                <h3 className="font-label-md text-label-md text-on-surface mb-2">{s.title}</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">{s.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Creators */}
-      <section id="featured-creators" className="max-w-6xl mx-auto px-4 py-16 md:py-24">
-        <motion.div {...fadeUp} className="text-center mb-12">
-          <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-            Meet Our <span className="text-primary-container">Creators</span>
-          </h2>
-          <p className="text-on-surface-variant max-w-xl mx-auto">
-            From indie filmmakers to award-winning directors — discover the talent that makes NovaFlix extraordinary.
-          </p>
-        </motion.div>
-
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[3/4] bg-white/5 rounded-xl mb-3" />
-                <div className="h-4 bg-white/5 rounded w-24 mb-2" />
-                <div className="h-3 bg-white/5 rounded w-16" />
-              </div>
-            ))}
-          </div>
-        ) : error ? (
-          <div className="text-center py-12 space-y-4">
-            <p className="text-on-surface-variant/80 text-sm">{error}</p>
-            <button
-              onClick={retryLoad}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-variant/20 border border-outline/20 text-sm font-medium hover:bg-surface-variant/40 transition-colors"
-            >
-              <Icon name="refresh" className="w-4 h-4" /> Retry
-            </button>
-          </div>
-        ) : creators.length === 0 ? (
-          <p className="text-center text-on-surface-variant/60 text-sm py-10">Be among the first creators on the platform.</p>
-        ) : (
-          <motion.div {...stagger} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
-            {creators.slice(0, 10).map((c) => (
-              <CreatorCard key={c.id} creator={c} onOpen={() => navigate(`/creators/${c.id}`)} />
-            ))}
-          </motion.div>
-        )}
-      </section>
-
-      {/* Testimonials */}
-      <section className="bg-surface-container-high border-y border-white/5 py-16 md:py-24">
-        <div className="max-w-6xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-              What Creators <span className="text-primary-container">Say</span>
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-gutter">
+      <section className="c-section c-features" id="features">
+        <div className="c-container">
+          <motion.span initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}} className="c-label">CREATOR TOOLS</motion.span>
+          <motion.h2 initial={{opacity:0,y:20}} whileInView={{opacity:1,y:0}} viewport={{once:true}} className="c-title">Everything you need to <span className="c-red">build your film career.</span></motion.h2>
+          <p className="c-desc">NovaFlix gives creators a home for their work, their audience and their creative identity.</p>
+          <motion.div className="c-feature-grid" initial="hidden" whileInView="visible" viewport={{once:true}} variants={{hidden:{}, visible:{transition:{staggerChildren:0.08}}}}>
             {[
-              { quote: 'I published my short film globally in one afternoon. The analytics dashboard alone changed how I make films.', name: 'Amara O.', role: 'Indie Film Director' },
-              { quote: 'The recommendation engine brought me thousands of new viewers. I was monetizing within my first week.', name: 'David M.', role: 'Documentary Filmmaker' },
-              { quote: 'Full creative control, real payouts, direct fan relationships. This is what distribution should feel like.', name: 'Lena K.', role: 'Series Creator' },
-            ].map((t, i) => (
-              <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-surface-container border border-white/5 rounded-xl p-6"
-              >
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Icon key={j} name="star" fill={true} className="text-primary-container" />
-                  ))}
-                </div>
-                <p className="text-on-surface-variant text-sm leading-relaxed mb-4 italic">"{t.quote}"</p>
-                <div>
-                  <p className="font-label-md text-label-md text-on-surface">{t.name}</p>
-                  <p className="text-on-surface-variant/60 text-xs">{t.role}</p>
-                </div>
+              {icon:'🎬',t:'Publish Your Work',d:'Upload movies, shorts, trailers and original video content directly to your NovaFlix creator profile.'},
+              {icon:'📊',t:'Understand Your Audience',d:'See how viewers discover your work, where your audience comes from and which releases are connecting with fans.'},
+              {icon:'🚀',t:'Promote Your Releases',d:'Put your movie or trailer in front of audiences that are interested in your genre and creative style.'},
+              {icon:'💰',t:'Earn From Your Creativity',d:'Eligible creators can earn through NovaFlix creator monetization programs and audience-supported features.'},
+              {icon:'❤️',t:'Build Real Fans',d:'Turn viewers into followers and create a community around your movies, personality and creative journey.'},
+              {icon:'🌍',t:'Reach Beyond Borders',d:'Give your stories the opportunity to reach viewers beyond your city, country or existing social audience.'},
+            ].map(f=>(
+              <motion.div key={f.t} variants={{hidden:{opacity:0,y:30}, visible:{opacity:1,y:0}}} whileHover={{y:-8}} className="c-feature-card">
+                <div className="c-feature-icon">{f.icon}</div><h3>{f.t}</h3><p>{f.d}</p>
               </motion.div>
             ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="c-section c-earn" id="earn">
+        <div className="c-container c-earn-layout">
+          <motion.div className="c-earn-visual" initial={{opacity:0, x:-30}} whileInView={{opacity:1,x:0}} viewport={{once:true}} transition={{duration:0.7}}>
+            <div className="c-money-card">
+              <small>CREATOR EARNINGS</small><h3>₦••••••</h3>
+              <div className="c-money-line"><span></span></div><small>Earnings dashboard</small>
+            </div>
+            <motion.div className="c-earning-badge" animate={{y:[0,-8,0]}} transition={{repeat:Infinity, duration:3}}>✦ Creator payout available</motion.div>
+          </motion.div>
+          <div>
+            <span className="c-label">GET PAID</span>
+            <h2 className="c-title">Your creativity can become <span className="c-gold">a business.</span></h2>
+            <p className="c-desc">NovaFlix is designed to give creators multiple ways to build sustainable income around their creative work and audience.</p>
+            <div className="c-earning-list">
+              {[
+                {h:'Content-based earnings',p:'Eligible movies and short-form content can participate in NovaFlix creator monetization programs.'},
+                {h:'Fan support',p:'Let your audience support your work through creator gifts, tips and community features.'},
+                {h:'Products & experiences',p:'Build additional revenue around merchandise, digital products, workshops and creator experiences.'},
+              ].map(i=>(
+                <div key={i.h} className="c-earning-item"><div className="c-check">✓</div><div><h4>{i.h}</h4><p>{i.p}</p></div></div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="max-w-6xl mx-auto px-4 py-16 md:py-24">
-        <motion.div {...fadeUp} className="text-center mb-14">
-          <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-            Simple, <span className="text-primary-container">transparent</span> pricing
-          </h2>
-          <p className="text-on-surface-variant max-w-xl mx-auto">
-            Every plan includes hosting, global distribution, analytics, and your full creator toolkit. No hidden fees.
-          </p>
-        </motion.div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-          {plans.map((p, i) => (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className={`relative rounded-xl border p-6 flex flex-col ${p.featured ? 'border-primary-container ring-1 ring-primary-container/40 bg-gradient-to-b from-primary-container/10 to-surface-container shadow-[0_0_30px_rgba(229,9,20,0.2)]' : 'border-white/5 bg-surface-container'}`}
-            >
-              {p.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container text-xs font-semibold px-4 py-1 rounded-full whitespace-nowrap">Most Popular</span>}
-              <h3 className="font-label-md text-label-md text-on-surface mb-2">{p.name}</h3>
-              <div className="mb-5">
-                <span className="text-3xl font-bold text-on-surface">{formatCurrency(p.price)}</span>
-                <span className="text-on-surface-variant text-sm">{p.period}</span>
-              </div>
-              <ul className="space-y-2.5 mb-6 flex-1">
-                {p.features.map(f => (
-                  <li key={f} className="text-sm text-on-surface-variant flex items-start gap-2">
-                    <Icon name="check_circle" className="w-4 h-4 text-primary shrink-0 mt-0.5" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to={authedCreator ? '/creator/choose-plan' : signupTo}
-                className={`block text-center w-full py-2.5 rounded-xl font-semibold text-sm transition-colors ${p.featured ? 'bg-primary-container text-on-primary-container hover:brightness-110' : 'bg-surface-variant/20 text-on-surface hover:bg-surface-variant/40 border border-outline/20'}`}
-              >
-                Choose {p.name}
-              </Link>
+      <section className="c-section c-analytics" id="analytics">
+        <div className="c-container">
+          <span className="c-label">CREATOR ANALYTICS</span>
+          <h2 className="c-title">Don&apos;t just create. <span className="c-red">Know what&apos;s working.</span></h2>
+          <p className="c-desc">Turn audience activity into useful information that can help you make smarter creative and promotional decisions.</p>
+          <div className="c-analytics-showcase">
+            <motion.div className="c-analytics-large" initial={{opacity:0,y:20}} whileInView={{opacity:1,y:0}} viewport={{once:true}}>
+              <h3>Watch time</h3><p>Understand how viewers are engaging with your releases over time.</p>
+              <div className="c-line-chart">{[30,45,42,60,54,75,83,100].map((h,i)=><motion.div key={i} className="c-line-bar" initial={{height:0}} whileInView={{height:`${h}%`}} viewport={{once:true}} transition={{delay:i*0.07, duration:0.6}} />)}</div>
             </motion.div>
-          ))}
+            <motion.div className="c-analytics-large" initial={{opacity:0,y:20}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:0.15}}>
+              <h3>Audience insights</h3><p>Learn more about the people discovering and following your creative work.</p>
+              <div className="c-audience-box">
+                <div className="c-audience-row"><span>Followers</span><strong>{loading?'—': safeCount(creators.reduce((a,c)=>a+(Number(c.followers_count)||0),0))}</strong></div>
+                <div className="c-audience-row"><span>New viewers</span><strong>+18.4K</strong></div>
+                <div className="c-audience-row"><span>Returning viewers</span><strong>64%</strong></div>
+                <div className="c-audience-row"><span>Top genre</span><strong>Drama</strong></div>
+              </div>
+            </motion.div>
+          </div>
         </div>
-        <p className="text-center text-on-surface-variant/50 text-xs mt-8">All plans unlock creator features. Cancel or switch anytime.</p>
       </section>
 
-      {/* FAQ */}
-      <section id="faq" className="bg-surface-container-high border-y border-white/5 py-16 md:py-24">
-        <div className="max-w-3xl mx-auto px-4">
-          <motion.div {...fadeUp} className="text-center mb-12">
-            <h2 className="text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface mb-3">
-              Frequently Asked <span className="text-primary-container">Questions</span>
-            </h2>
+      <section className="c-section c-promote" id="promote">
+        <div className="c-container c-promote-layout">
+          <div>
+            <span className="c-label">PROMOTION</span>
+            <h2 className="c-title">Put your next release <span className="c-red">in the spotlight.</span></h2>
+            <p className="c-desc">Don&apos;t wait for people to randomly discover your movie. Use creator promotion tools to give your release more visibility inside the NovaFlix ecosystem.</p>
+            <div className="c-earning-list">
+              <div className="c-earning-item"><div className="c-check">1</div><div><h4>Choose your release</h4><p>Select the movie, short or trailer you want to put in front of audiences.</p></div></div>
+              <div className="c-earning-item"><div className="c-check">2</div><div><h4>Find the right audience</h4><p>Use audience and content signals to reach people interested in your type of content.</p></div></div>
+              <div className="c-earning-item"><div className="c-check">3</div><div><h4>Measure the result</h4><p>Monitor engagement and understand how viewers respond to your promotion.</p></div></div>
+            </div>
+          </div>
+          <motion.div initial={{opacity:0, scale:0.9}} whileInView={{opacity:1, scale:1}} viewport={{once:true}} transition={{duration:0.7}}>
+            <div className="c-phone"><div className="c-phone-screen"><div className="c-movie-poster"></div><div className="c-phone-content"><span className="c-promoted-label">PROMOTED RELEASE</span><h3>Your Next Film</h3><p>A new cinematic experience is waiting to be discovered.</p><span className="c-watch-btn">Watch Trailer →</span></div></div></div>
           </motion.div>
+        </div>
+      </section>
 
-          <div className="space-y-4">
-            {faqs.map((f, i) => (
-              <motion.div
-                key={f.q}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.06 }}
-                className={`rounded-xl overflow-hidden border transition-colors ${openFaq === i ? 'border-primary-container/40' : 'border-white/5'} bg-surface-container`}
-              >
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-4 flex justify-between items-center gap-4 text-left hover:bg-surface-container-high transition-colors"
-                >
-                  <span className={`font-label-md text-label-md ${openFaq === i ? 'text-primary' : 'text-on-surface'}`}>{f.q}</span>
-                  <Icon name="expand_more" className={`w-5 h-5 shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180 text-primary' : 'text-on-surface-variant'}`} />
-                </button>
-                {openFaq === i && (
-                  <div className="px-6 pb-5 text-body-md text-on-surface-variant leading-relaxed">{f.a}</div>
-                )}
+      <section className="c-section c-community">
+        <div className="c-container">
+          <span className="c-label">YOUR COMMUNITY</span>
+          <h2 className="c-title" style={{marginLeft:'auto',marginRight:'auto'}}>Build more than views. <span className="c-red">Build fandom.</span></h2>
+          <p className="c-desc">Your creator profile becomes a home where audiences can discover your work, follow your journey and interact with your content.</p>
+          <motion.div className="c-community-grid" initial="hidden" whileInView="visible" viewport={{once:true}} variants={{hidden:{}, visible:{transition:{staggerChildren:0.08}}}}>
+            {[
+              {n:'01',t:'Followers',d:'Grow a dedicated audience around your work.'},
+              {n:'02',t:'Comments',d:'Start conversations around your movies.'},
+              {n:'03',t:'Live Interaction',d:'Connect with fans through interactive experiences.'},
+              {n:'04',t:'Fan Support',d:'Give supporters ways to contribute to your journey.'},
+            ].map(c=>(
+              <motion.div key={c.n} variants={{hidden:{opacity:0,y:20}, visible:{opacity:1,y:0}}} whileHover={{y:-6}} className="c-community-card">
+                <div className="c-community-number">{c.n}</div><h4>{c.t}</h4><p>{c.d}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="c-section c-journey">
+        <div className="c-container">
+          <span className="c-label">HOW IT WORKS</span>
+          <h2 className="c-title">From first upload to <span className="c-red">your next big audience.</span></h2>
+          <motion.div className="c-journey-grid" initial="hidden" whileInView="visible" viewport={{once:true}} variants={{hidden:{}, visible:{transition:{staggerChildren:0.1}}}}>
+            {[
+              {n:'STEP 01',t:'Create',d:'Set up your creator profile and tell the NovaFlix community who you are.'},
+              {n:'STEP 02',t:'Publish',d:'Upload your movie, short, trailer or other original creative work.'},
+              {n:'STEP 03',t:'Grow',d:'Build followers, engage with viewers and use analytics to understand your audience.'},
+              {n:'STEP 04',t:'Earn',d:'Participate in available monetization opportunities as your audience grows.'},
+            ].map(j=>(
+              <motion.div key={j.n} variants={{hidden:{opacity:0,y:30}, visible:{opacity:1,y:0}}} className="c-journey-card">
+                <div className="c-journey-number">{j.n}</div><h3>{j.t}</h3><p>{j.d}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <motion.section className="c-quote" initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}}><div className="c-container"><div className="c-quote-text">“Don&apos;t just upload a movie. <span>Build a world people want to return to.</span>”</div></div></motion.section>
+
+      <section className="c-section c-faq" id="faq">
+        <div className="c-container">
+          <span className="c-label">CREATOR FAQ</span>
+          <h2 className="c-title">Questions creators <span className="c-red">ask.</span></h2>
+          <div className="c-faq-container">
+            {[
+              {q:'Who can become a NovaFlix creator?',a:'NovaFlix is designed for filmmakers, directors, producers, actors, editors, reviewers, storytellers and other original video creators.'},
+              {q:'Can I upload my movie?',a:'Eligible creators can submit original movies, shorts and other video content through the creator platform, subject to NovaFlix content and rights requirements.'},
+              {q:'Do creators get paid?',a:'NovaFlix is designed to provide monetization opportunities for eligible creators. Earnings can depend on the creator program, content, audience engagement and applicable platform terms.'},
+              {q:'Can I promote my movie?',a:'Yes. NovaFlix is designed to provide creator promotion tools that can help eligible creators increase the visibility of their movies, trailers and other releases.'},
+              {q:'Can fans support creators?',a:'NovaFlix can provide audience-support features such as creator gifts and other fan-supported experiences where available.'},
+              {q:'Will I have access to analytics?',a:'Creator analytics are designed to help you understand content performance, audience growth, engagement and other useful creator metrics.'},
+            ].map((f,i)=>(
+              <motion.div key={f.q} initial={{opacity:0,y:10}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:i*0.05}} className={`c-faq-item ${activeFaq===i?'active':''}`}>
+                <button className="c-faq-q" onClick={()=>setActiveFaq(activeFaq===i?null:i)}>{f.q}<span className="c-faq-icon">+</span></button>
+                <AnimatePresence>
+                  {activeFaq===i && (
+                    <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.3}}>
+                      <div className="c-faq-a" style={{display:'block'}}>{f.a}</div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="relative overflow-hidden py-20 md:py-28">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary-container/15 via-transparent to-transparent" />
-        <div className="relative max-w-3xl mx-auto px-4 text-center">
-          <motion.div {...fadeUp}>
-            <Icon name="play_circle" className="w-10 h-10 text-primary-container mx-auto mb-4" />
-            <h2 className="text-headline-lg-mobile md:text-display-md font-bold text-on-surface mb-4">
-              Ready to Share Your <span className="text-primary-container">Story</span>?
-            </h2>
-            <p className="text-on-surface-variant text-body-md mb-8 max-w-lg mx-auto">
-              Join hundreds of creators already making an impact on NovaFlix. Your audience is waiting.
-            </p>
-            <CtaButtons />
-          </motion.div>
+      <section className="c-final" id="join">
+        <div className="c-container">
+          <motion.span initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}} className="c-label">YOUR STORY STARTS HERE</motion.span>
+          <motion.h2 initial={{opacity:0,y:20}} whileInView={{opacity:1,y:0}} viewport={{once:true}} style={{fontSize:'clamp(45px,7vw,80px)',lineHeight:1,fontWeight:900,letterSpacing:'-3px',maxWidth:900,margin:'auto auto 25px'}}>Ready to put your <span className="c-red">story on NovaFlix?</span></motion.h2>
+          <p style={{maxWidth:600,margin:'auto auto 35px',color:'#999',lineHeight:1.7}}>Create your creator profile, publish your work, connect with audiences and start building your creative future.</p>
+          <motion.button whileHover={{scale:1.05,y:-2}} whileTap={{scale:0.98}} onClick={handleJoin} className="c-primary" style={{fontSize:18, padding:'18px 34px'}}>Join NovaFlix as a Creator →</motion.button>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 px-6 border-t border-white/5 bg-surface-container-lowest">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <img src="/leter-mark-logo.png" alt="" className="h-6 w-auto" />
-          <p className="text-on-surface-variant/50 text-xs">&copy; {new Date().getFullYear()} NovaFlix Inc. All rights reserved.</p>
-          <div className="flex gap-6 text-xs text-on-surface-variant/60">
-            <Link to="/" className="hover:text-on-surface transition-colors">For Viewers</Link>
-            <Link to="/login" className="hover:text-on-surface transition-colors">Creator Login</Link>
-            <Link to={signupTo} className="hover:text-on-surface transition-colors">Become a Creator</Link>
+      <footer className="c-footer">
+        <div className="c-container">
+          <div className="c-footer-grid">
+            <div className="c-footer-brand">
+              <div className="c-logo">Nova<span>Flix</span></div>
+              <p>A home for movies, creators and the people who love great stories.</p>
+            </div>
+            <div className="c-footer-col"><h4>Creators</h4><a onClick={handleBecomeCreator} style={{cursor:'pointer'}}>Creator Studio</a><a onClick={()=>navigate('/upload')} style={{cursor:'pointer'}}>Upload</a><a onClick={()=>navigate('/creator/analytics')} style={{cursor:'pointer'}}>Analytics</a><a onClick={()=>navigate('/creator/wallet')} style={{cursor:'pointer'}}>Earnings</a></div>
+            <div className="c-footer-col"><h4>Platform</h4><a onClick={()=>navigate('/discover')} style={{cursor:'pointer'}}>Movies</a><a onClick={()=>navigate('/discover?sort=shorts')} style={{cursor:'pointer'}}>Shorts</a><a onClick={()=>navigate('/community')} style={{cursor:'pointer'}}>Community</a><a onClick={()=>navigate('/events')} style={{cursor:'pointer'}}>Events</a></div>
+            <div className="c-footer-col"><h4>Company</h4><a onClick={()=>navigate('/about')} style={{cursor:'pointer'}}>About NovaFlix</a><a>Contact</a><a>Privacy</a><a>Terms</a></div>
           </div>
+          <div className="c-footer-bottom"><span>© 2026 NovaFlix. All rights reserved.</span><span>Create. Reach. Earn.</span></div>
         </div>
       </footer>
     </div>

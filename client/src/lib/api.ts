@@ -113,8 +113,8 @@ export interface PublicCreator {
   followers_count: number
 }
 
-export function getPublicCreators(signal?: AbortSignal): Promise<{ success: boolean; creators?: PublicCreator[]; error?: string }> {
-  return fetchJson(`${BASE}/creator/public`, undefined, signal)
+export function getPublicCreators(signal?: AbortSignal, limit: number = 8): Promise<{ success: boolean; creators?: PublicCreator[]; error?: string }> {
+  return fetchJson(`${BASE}/creator/public`, { limit: String(limit) }, signal)
 }
 
 // ===== DISCOVERY ENGINE (Spotify-style) =====
